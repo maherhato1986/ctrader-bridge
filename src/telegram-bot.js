@@ -2,7 +2,7 @@ const axios = require('axios');
 require('dotenv').config();
 
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-const BRIDGE_URL = process.env.BRIDGE_URL || 'http://127.0.0.1';
+cconst BRIDGE_URL = process.env.BRIDGE_URL || 'http://67.205.174.166';
 const API_KEY = process.env.API_KEY || 'maher123';
 
 if (!TELEGRAM_BOT_TOKEN) {
