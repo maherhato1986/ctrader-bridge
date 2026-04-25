@@ -535,7 +535,7 @@ p.position?.price ||
         newSL
       });
 
-      await modifyStopLoss(p, newSL);
+      await modifyStopLoss(p.positionId, newSL);
     }
 
   } catch (err) {
@@ -598,7 +598,7 @@ p.position?.price ||
           positionId: p.positionId
         });
 
-        await closePosition(p.positionId);
+        await closePosition(p.positionId, p.volume);
 
         trade.exitReason = 'smart_exit';
         trade.exitPrice = currentPrice;
@@ -653,7 +653,7 @@ async function refreshCTraderToken() {
   try {
     console.log('🔄 المحاولة لتجديد Access Token...');
     
-    const response = await axios.get('https://api.ctraderapi.com/v2/oauth/token', {
+    axios.post('https://api.ctraderapi.com/v2/oauth/token', null, {
       params: {
         grant_type: 'refresh_token',
         client_id: process.env.CTRADER_CLIENT_ID,
@@ -694,7 +694,7 @@ function updateEnvFile(newToken, newRefreshToken) {
   }
 }
 
-await modifyStopLoss(p.positionId, newSL) {
+async function modifyStopLoss(positionId, stopLoss) {
   if (MODE !== 'LIVE') {
     return { ok: true, simulated: true };
   }
@@ -1410,7 +1410,9 @@ app.post('/close-all-positions', auth, async (req, res) => {
       return res.json({
         ok: true,
         message: 'No open positions',
+        total: 0,
         closedCount: 0,
+        failedCount: 0,
         results: []
       });
     }
@@ -1420,21 +1422,43 @@ app.post('/close-all-positions', auth, async (req, res) => {
     for (const rawPosition of positions) {
       const p = extractPositionInfo(rawPosition);
 
+      if (!p.positionId || !p.volume) {
+        results.push({
+          ok: false,
+          positionId: p.positionId || null,
+          symbolId: p.symbolId || null,
+          volume: p.volume || null,
+          error: 'Missing positionId or volume'
+        });
+        continue;
+      }
+
       try {
         console.log('🛑 CLOSING POSITION:', {
           positionId: p.positionId,
           symbolId: p.symbolId,
-          volume: p.volume
+          volume: p.volume,
+          side: p.side
         });
 
         const result = await closePosition(p.positionId, p.volume);
 
+        const marketClosed = isMarketClosedError(result);
+        const hasError =
+          marketClosed ||
+          result?.payload?.errorCode ||
+          result?.payload?.description ||
+          result?.errorCode;
+
         results.push({
-          ok: !isMarketClosedError(result),
+          ok: !hasError,
           positionId: p.positionId,
           symbolId: p.symbolId,
           volume: p.volume,
-          marketClosed: isMarketClosedError(result),
+          side: p.side,
+          marketClosed,
+          errorCode: result?.payload?.errorCode || result?.errorCode || null,
+          description: result?.payload?.description || result?.description || null,
           result
         });
 
@@ -1444,16 +1468,20 @@ app.post('/close-all-positions', auth, async (req, res) => {
           positionId: p.positionId,
           symbolId: p.symbolId,
           volume: p.volume,
+          side: p.side,
           error: err.message
         });
       }
     }
 
+    const closedCount = results.filter(r => r.ok).length;
+    const failedCount = results.filter(r => !r.ok).length;
+
     return res.json({
-      ok: true,
+      ok: failedCount === 0,
       total: positions.length,
-      closedCount: results.filter(r => r.ok).length,
-      failedCount: results.filter(r => !r.ok).length,
+      closedCount,
+      failedCount,
       results
     });
 
@@ -2326,25 +2354,6 @@ setInterval(async () => {
 /* =========================
    AUTO TOKEN REFRESH LOGIC
 ========================= */
-
-// وظيفة لتحديث ملف .env برمجياً لحفظ التوكنات الجديدة
-function updateEnvFile(newToken, newRefreshToken) {
-  try {
-    const envPath = '.env';
-    if (fs.existsSync(envPath)) {
-      let envContent = fs.readFileSync(envPath, 'utf8');
-      
-      // استبدال القيم القديمة بالجديدة باستخدام Regex
-      envContent = envContent.replace(/CTRADER_ACCESS_TOKEN=.*/, `CTRADER_ACCESS_TOKEN='${newToken}'`);
-      envContent = envContent.replace(/CTRADER_REFRESH_TOKEN=.*/, `CTRADER_REFRESH_TOKEN='${newRefreshToken}'`);
-      
-      fs.writeFileSync(envPath, envContent);
-      console.log('💾 [System] .env file updated with new tokens.');
-    }
-  } catch (err) {
-    console.error('❌ [Error] Failed to update .env file:', err.message);
-  }
-}
 
 
 
