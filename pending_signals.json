@@ -1,0 +1,14 @@
+[
+  {
+    "signalId": "tv-1777045610447",
+    "symbol": "XAUUSD",
+    "action": "buy",
+    "volume": null,
+    "stopLossUsd": 10,
+    "takeProfitUsd": 0,
+    "riskPercent": 0.01,
+    "atr": null,
+    "status": "pending",
+    "createdAt": "2026-04-24T15:46:50.447Z"
+  }
+]

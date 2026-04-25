@@ -1,0 +1,356 @@
+class CTraderProtoSession {
+  constructor(ctx) {
+    this.ctx = ctx;
+    this.ws = null;
+    this.waiters = [];
+    this.heartbeatTimer = null;
+  }
+
+  async connect() {
+    await new Promise((resolve, reject) => {
+      this.ws = new WebSocket(CTRADER_WS_URL);
+
+      this.ws.on('open', () => {
+        this.startHeartbeat();
+        resolve();
+      });
+
+      this.ws.on('message', (data) => {
+        try {
+          const msg = this.decodeIncoming(data);
+          this.dispatch(msg);
+        } catch (err) {
+          console.error('DECODE ERROR:', err);
+        }
+      });
+
+      this.ws.on('error', reject);
+      this.ws.on('close', () => {
+        this.stopHeartbeat();
+      });
+    });
+  }
+
+  close() {
+    this.stopHeartbeat();
+    if (this.ws) {
+      try { this.ws.close(); } catch {}
+    }
+  }
+
+startHeartbeat() {
+   console.log('Heartbeat disabled temporarily');
+   return;
+}
+
+  stopHeartbeat() {
+    if (this.heartbeatTimer) {
+      clearInterval(this.heartbeatTimer);
+      this.heartbeatTimer = null;
+    }
+  }
+
+decodeIncoming(data) {
+  const buffer = Buffer.isBuffer(data) ? data : Buffer.from(data);
+  const envelope = this.ctx.ProtoMessage.decode(buffer);
+
+  const payloadTypeId = envelope.payloadType;
+  const payloadTypeName = this.ctx.payloadNameById[payloadTypeId] || `UNKNOWN_${payloadTypeId}`;
+  const messageTypeName = enumToMessageName(payloadTypeName);
+
+  let payload = {};
+  try {
+    const payloadType = findType(this.ctx.root, messageTypeName);
+    payload = payloadType.toObject(
+      payloadType.decode(envelope.payload),
+      { longs: Number, enums: String, defaults: true }
+    );
+  } catch {
+    payload = { raw: envelope.payload };
+  }
+
+  return {
+    payloadTypeId,
+    payloadTypeName,
+    messageTypeName,
+    clientMsgId: envelope.clientMsgId || null,
+    payload
+  };
+}
+
+resolvePayloadTypeId(ctx, messageName) {
+  const explicitMap = {
+    ProtoOAApplicationAuthReq: 'PROTO_OA_APPLICATION_AUTH_REQ',
+    ProtoOAGetAccountListByAccessTokenReq: 'PROTO_OA_GET_ACCOUNTS_BY_ACCESS_TOKEN_REQ',
+    ProtoOAAccountAuthReq: 'PROTO_OA_ACCOUNT_AUTH_REQ',
+    ProtoOAAssetListReq: 'PROTO_OA_ASSET_LIST_REQ',
+    ProtoOASymbolsListReq: 'PROTO_OA_SYMBOLS_LIST_REQ',
+    ProtoOASymbolByIdReq: 'PROTO_OA_SYMBOL_BY_ID_REQ',
+    ProtoOANewOrderReq: 'PROTO_OA_NEW_ORDER_REQ',
+    ProtoHeartbeatEvent: 'PROTO_HEARTBEAT_EVENT'
+  };
+
+  const candidates = [];
+
+  if (explicitMap[messageName]) {
+    candidates.push(explicitMap[messageName]);
+  }
+
+  candidates.push(
+    messageName,
+    messageName.toUpperCase(),
+    messageName
+      .replace(/^ProtoOA/, 'PROTO_OA_')
+      .replace(/^Proto/, 'PROTO_')
+      .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
+      .toUpperCase()
+  );
+
+  for (const candidate of candidates) {
+    if (Object.prototype.hasOwnProperty.call(ctx.PayloadEnum.values, candidate)) {
+      return ctx.PayloadEnum.values[candidate];
+    }
+  }
+
+  throw new Error(`Payload enum not found for ${messageName}. Tried: ${candidates.join(', ')}`);
+}
+
+send(messageName, payload = {}, clientMsgId = `msg-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`) {
+  const msgType = findType(this.ctx.root, messageName);
+  const payloadType = resolvePayloadTypeId(this.ctx, messageName);
+
+  const errMsg = msgType.verify(payload);
+  if (errMsg) {
+    throw new Error(`${messageName} payload invalid: ${errMsg}`);
+  }
+
+  const msgPayload = msgType.create(payload);
+  const payloadBytes = msgType.encode(msgPayload).finish();
+
+  const envelope = this.ctx.ProtoMessage.create({
+    payloadType,
+    payload: payloadBytes,
+    clientMsgId
+  });
+
+  const bytes = this.ctx.ProtoMessage.encode(envelope).finish();
+  this.ws.send(bytes);
+
+  return clientMsgId;
+}
+
+  waitFor(predicate, timeoutMs = 10000) {
+    return new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        this.waiters = this.waiters.filter(w => w !== waiter);
+        reject(new Error('Timeout waiting for cTrader response'));
+      }, timeoutMs);
+
+      const waiter = {
+        predicate,
+        resolve: (msg) => {
+          clearTimeout(timeout);
+          resolve(msg);
+        },
+        reject: (err) => {
+          clearTimeout(timeout);
+          reject(err);
+        }
+      };
+
+      this.waiters.push(waiter);
+    });
+  }
+
+  dispatch(msg) {
+    console.log('PROTO WS MESSAGE:', msg.payloadTypeName, msg.payload);
+
+    if (msg.messageTypeName === 'ProtoOAErrorRes') {
+      const err = new Error(msg.payload.description || msg.payload.errorCode || 'cTrader error');
+      err.details = msg;
+      for (const waiter of [...this.waiters]) {
+        waiter.reject(err);
+      }
+      this.waiters = [];
+      return;
+    }
+
+    for (const waiter of [...this.waiters]) {
+      try {
+        if (waiter.predicate(msg)) {
+          this.waiters = this.waiters.filter(w => w !== waiter);
+          waiter.resolve(msg);
+        }
+      } catch (err) {
+        this.waiters = this.waiters.filter(w => w !== waiter);
+        waiter.reject(err);
+      }
+    }
+  }
+
+  async appAuth() {
+    const clientMsgId = this.send('ProtoOAApplicationAuthReq', {
+      clientId: CTRADER_CLIENT_ID,
+      clientSecret: CTRADER_CLIENT_SECRET
+    });
+
+    await this.waitFor(
+  m => m.messageTypeName === 'ProtoOAApplicationAuthRes' && m.clientMsgId === clientMsgId,
+  10000
+);
+  }
+
+  async getAccounts() {
+    const clientMsgId = this.send('ProtoOAGetAccountListByAccessTokenReq', {
+      accessToken: CTRADER_ACCESS_TOKEN
+    });
+
+   const res = await this.waitFor(
+  m => m.messageTypeName === 'ProtoOAGetAccountListByAccessTokenRes' && m.clientMsgId === clientMsgId,
+  10000
+);
+
+    return res.payload;
+  }
+
+
+
+  async accountAuth() {
+    const clientMsgId = this.send('ProtoOAAccountAuthReq', {
+      ctidTraderAccountId: CTRADER_ACCOUNT_ID,
+      accessToken: CTRADER_ACCESS_TOKEN
+    });
+
+    const res = await this.waitFor(
+  m => m.messageTypeName === 'ProtoOAAccountAuthRes' && m.clientMsgId === clientMsgId,
+  10000
+);
+
+    return res.payload;
+  }
+
+  async getAssets() {
+    const clientMsgId = this.send('ProtoOAAssetListReq', {
+      ctidTraderAccountId: CTRADER_ACCOUNT_ID
+    });
+
+    const res = await this.waitFor(
+  m => m.messageTypeName === 'ProtoOAAssetListRes' && m.clientMsgId === clientMsgId,
+  10000
+);
+
+    return res.payload;
+  }
+
+  async getSymbols() {
+    const clientMsgId = this.send('ProtoOASymbolsListReq', {
+      ctidTraderAccountId: CTRADER_ACCOUNT_ID,
+      includeArchivedSymbols: false
+    });
+
+   const res = await this.waitFor(
+  m => m.messageTypeName === 'ProtoOASymbolsListRes' && m.clientMsgId === clientMsgId,
+  10000
+);
+
+    return res.payload;
+  }
+
+  async getSymbolById(symbolIds = []) {
+    const clientMsgId = this.send('ProtoOASymbolByIdReq', {
+      ctidTraderAccountId: CTRADER_ACCOUNT_ID,
+      symbolId: symbolIds
+    });
+
+const res = await this.waitFor(
+  m => m.messageTypeName === 'ProtoOASymbolByIdRes' && m.clientMsgId === clientMsgId,
+  10000
+);
+
+    return res.payload;
+  }
+
+  async sendMarketOrder({
+    symbolId,
+    side,
+    volume,
+    relativeStopLoss,
+    relativeTakeProfit,
+    label,
+    comment
+  }) {
+    const orderTypeEnum = findEnum(this.ctx.root, ['ProtoOAOrderType']);
+    const tradeSideEnum = findEnum(this.ctx.root, ['ProtoOATradeSide']);
+
+   const orderType = lookupEnumValue(orderTypeEnum, [
+'MARKET',
+'ORDER_TYPE_MARKET',
+'PROTO_OA_ORDER_TYPE_MARKET'
+]);
+
+    const tradeSide = lookupEnumValue(tradeSideEnum, [
+      String(side || '').toUpperCase(),
+      `TRADE_SIDE_${String(side || '').toUpperCase()}`
+    ]);
+
+    const payload = {
+      ctidTraderAccountId: CTRADER_ACCOUNT_ID,
+      symbolId: Number(symbolId),
+      orderType,
+      tradeSide,
+      volume: Number(volume),
+      label: label || `RKL-${Date.now()}`,
+      comment: comment || 'Live order from proto bridge'
+    };
+
+    if (
+      relativeStopLoss !== undefined &&
+      relativeStopLoss !== null &&
+      relativeStopLoss !== ''
+    ) {
+      payload.relativeStopLoss = Number(relativeStopLoss);
+    }
+
+    if (
+      relativeTakeProfit !== undefined &&
+      relativeTakeProfit !== null &&
+      relativeTakeProfit !== ''
+    ) {
+      payload.relativeTakeProfit = Number(relativeTakeProfit);
+    }
+
+    const clientMsgId = this.send('ProtoOANewOrderReq', payload);
+
+    const res = await this.waitFor(
+      (m) =>
+        (
+          m.messageTypeName === 'ProtoOAExecutionEvent' ||
+          m.messageTypeName === 'ProtoOAOrderErrorEvent'
+        ) &&
+        (
+          m.clientMsgId === clientMsgId ||
+          Number(m.payload?.ctidTraderAccountId) === CTRADER_ACCOUNT_ID
+        ),
+      15000
+    );
+
+    return res;
+  }
+} 
+
+async function withSession(handler) {
+  requireEnv();
+  const ctx = await loadProtoContext();
+  const session = new CTraderProtoSession(ctx);
+
+  try {
+    await session.connect();
+    await session.appAuth();
+    const accounts = await session.getAccounts();
+    await session.accountAuth();
+
+    return await handler(session, accounts);
+  } finally {
+    session.close();
+  }
+}

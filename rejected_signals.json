@@ -1,0 +1,13 @@
+[
+  {
+    "signalId": "sig-13",
+    "symbol": "XAUUSD",
+    "action": "buy",
+    "volume": null,
+    "stopLossUsd": 10,
+    "takeProfitUsd": null,
+    "riskPercent": 0.01,
+    "status": "rejected",
+    "rejectedAt": "2026-04-23T08:11:43.774Z"
+  }
+]
