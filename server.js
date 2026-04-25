@@ -465,7 +465,12 @@ const currentPrice = Number(
           profitDistance
         });
 
-       await modifyStopLoss(p.positionId, entryPrice);
+       const buffer = atr * 0.1;
+
+await modifyStopLoss(
+  p.positionId,
+  isBuy ? entryPrice + buffer : entryPrice - buffer
+);
       }
     }
 
@@ -653,14 +658,14 @@ async function refreshCTraderToken() {
   try {
     console.log('🔄 المحاولة لتجديد Access Token...');
     
-    axios.post('https://api.ctraderapi.com/v2/oauth/token', null, {
-      params: {
-        grant_type: 'refresh_token',
-        client_id: process.env.CTRADER_CLIENT_ID,
-        client_secret: process.env.CTRADER_CLIENT_SECRET,
-        refresh_token: process.env.CTRADER_REFRESH_TOKEN,
-      }
-    });
+   const response = await axios.post('https://api.ctraderapi.com/v2/oauth/token', null, {
+  params: {
+    grant_type: 'refresh_token',
+    client_id: process.env.CTRADER_CLIENT_ID,
+    client_secret: process.env.CTRADER_CLIENT_SECRET,
+    refresh_token: process.env.CTRADER_REFRESH_TOKEN,
+  }
+});
 
     const newData = response.data;
     if (newData.access_token) {
@@ -1821,9 +1826,12 @@ if (!positionDecision.allowed) {
       return Number(pSymbolId) === Number(finalSymbolId);
     });
 
-    await Promise.all(
-      oppositePositions.map(p => closePosition(p.positionId))
-    );
+  await Promise.all(
+  oppositePositions.map(p => {
+    const info = extractPositionInfo(p);
+    return closePosition(info.positionId, info.volume);
+  })
+);
 
     console.log('✅ Old positions closed, executing new trade...');
 
