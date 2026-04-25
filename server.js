@@ -38,6 +38,7 @@ const PT = {
   GET_ACCOUNTS_RES: 2150,
 RECONCILE_REQ: Number(process.env.PT_RECONCILE_REQ || 2124),
 RECONCILE_RES: Number(process.env.PT_RECONCILE_RES || 2125),
+   AMEND_POSITION_SLTP_REQ: Number(process.env.PT_AMEND_POSITION_SLTP_REQ || 2110),
 
 CLOSE_POSITION_REQ: Number(process.env.PT_CLOSE_POSITION_REQ || 2111),
   ACCOUNT_AUTH_REQ: 2102,
@@ -693,14 +694,35 @@ function updateEnvFile(newToken, newRefreshToken) {
   }
 }
 
-async function modifyStopLoss(position, newSL) {
-  if (MODE !== 'LIVE') return;
+async function modifyStopLoss(positionId, stopLoss) {
+  if (MODE !== 'LIVE') {
+    return { ok: true, simulated: true };
+  }
+
+  requireCTraderEnv();
 
   return new Promise((resolve, reject) => {
     const ws = new WebSocket(CTRADER_WS_URL);
+    let settled = false;
+
+    const timeout = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      try { ws.close(); } catch {}
+      reject(new Error('Modify Stop Loss timeout'));
+    }, 30000);
+
+    function finish(data) {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      try { ws.close(); } catch {}
+      resolve(data);
+    }
 
     ws.on('open', () => {
       ws.send(JSON.stringify({
+        clientMsgId: `be-app-auth-${Date.now()}`,
         payloadType: PT.APP_AUTH_REQ,
         payload: {
           clientId: CTRADER_CLIENT_ID,
@@ -710,32 +732,49 @@ async function modifyStopLoss(position, newSL) {
     });
 
     ws.on('message', (raw) => {
-      const msg = JSON.parse(raw.toString());
+      try {
+        const msg = JSON.parse(raw.toString());
 
-      if (msg.payloadType === PT.APP_AUTH_RES) {
-        ws.send(JSON.stringify({
-          payloadType: PT.ACCOUNT_AUTH_REQ,
-          payload: {
+        if (msg.payloadType === PT.APP_AUTH_RES) {
+          ws.send(JSON.stringify({
+            clientMsgId: `be-account-auth-${Date.now()}`,
+            payloadType: PT.ACCOUNT_AUTH_REQ,
+            payload: {
+              ctidTraderAccountId: CTRADER_ACCOUNT_ID,
+              accessToken: CTRADER_ACCESS_TOKEN
+            }
+          }));
+          return;
+        }
+
+        if (msg.payloadType === PT.ACCOUNT_AUTH_RES) {
+          const payload = {
             ctidTraderAccountId: CTRADER_ACCOUNT_ID,
-            accessToken: CTRADER_ACCESS_TOKEN
-          }
-        }));
-      }
+            positionId: Number(positionId),
+            stopLoss: Number(stopLoss),
+            guaranteedStopLoss: false
+          };
 
-      if (msg.payloadType === PT.ACCOUNT_AUTH_RES) {
-        ws.send(JSON.stringify({
-          payloadType: 2107,
-          payload: {
-            ctidTraderAccountId: CTRADER_ACCOUNT_ID,
-            positionId: position.positionId,
-            stopLoss: newSL
-          }
-        }));
-      }
+          console.log('🛡️ BREAK EVEN SL PAYLOAD:', payload);
 
-      if (msg.payloadType === PT.EXECUTION_EVENT || msg.payload?.errorCode) {
-        ws.close();
-        resolve(msg);
+          ws.send(JSON.stringify({
+            clientMsgId: `break-even-${Date.now()}`,
+            payloadType: PT.AMEND_POSITION_SLTP_REQ,
+            payload
+          }));
+          return;
+        }
+
+        if (
+          msg.payloadType === PT.EXECUTION_EVENT ||
+          msg.payloadType === PT.ORDER_ERROR_EVENT ||
+          msg.payload?.errorCode
+        ) {
+          return finish(msg);
+        }
+
+      } catch (err) {
+        reject(err);
       }
     });
 
@@ -743,7 +782,46 @@ async function modifyStopLoss(position, newSL) {
   });
 }
 
+async function applyBreakEvenSafe() {
+  if (process.env.AUTO_MANAGEMENT_ENABLED !== 'true') return;
+  if (process.env.BREAK_EVEN_ENABLED !== 'true') return;
 
+  const triggerUsd = Number(process.env.BREAK_EVEN_TRIGGER_USD || 5);
+  const bufferUsd = Number(process.env.BREAK_EVEN_BUFFER_USD || 0.5);
+
+  const positions = await getOpenPositionsFromCTrader();
+
+  for (const raw of positions) {
+    const p = extractPositionInfo(raw);
+
+    const price = Number(raw.price || raw.tradeData?.price || 0);
+    const entry = Number(raw.entryPrice || raw.tradeData?.entryPrice || raw.position?.entryPrice || 0);
+    const side = String(p.side).toUpperCase();
+
+    if (!p.positionId || !price || !entry) continue;
+
+    const profitDistance = side.includes('BUY')
+      ? price - entry
+      : entry - price;
+
+    if (profitDistance < triggerUsd) continue;
+
+    const newSL = side.includes('BUY')
+      ? entry + bufferUsd
+      : entry - bufferUsd;
+
+    console.log('🛡️ BREAK EVEN TRIGGER:', {
+      positionId: p.positionId,
+      side,
+      entry,
+      price,
+      profitDistance,
+      newSL
+    });
+
+    await modifyStopLoss(p.positionId, newSL);
+  }
+}
 
 async function resolveSymbolId(symbolName) {
   const clean = String(symbolName || '').toUpperCase().trim();
@@ -2132,73 +2210,119 @@ function syncTradesWithBroker(positions, trades) {
   return filteredTrades;
 }
 
-// 2. المحرك الرئيسي (المعدل)
+
+// =========================
+// CORE ENGINE: SYNC & MANAGEMENT
+// =========================
+
+// 2. المحرك الرئيسي الآمن
 setInterval(async () => {
   try {
-    // جلب الصفقات الحية من البروكر مباشرة
+    // =========================
+    // STEP 0: قراءة الصفقات المفتوحة
+    // =========================
     const positions = await getOpenPositionsFromCTrader();
 
-    // جلب بيانات الصفقات المسجلة في ملف trades.json
+    // =========================
+    // STEP 1: قراءة trades.json
+    // =========================
     let trades = [];
     if (fs.existsSync('trades.json')) {
       const raw = fs.readFileSync('trades.json', 'utf8');
       trades = raw ? JSON.parse(raw) : [];
+      trades = Array.isArray(trades) ? trades : [trades];
     }
 
-    // --- بداية عملية المطابقة الذكية ---
-    if (trades.length > 0) {
-      // إذا كانت المنصة فارغة تماماً، نصفر الملف فوراً
-      if (!positions || positions.length === 0) {
-        if (trades.length > 0) {
-          console.log("🧹 [Sync] All positions closed. Clearing trades.json");
-          saveToFile('trades.json', []);
-        }
-        return; // توقف هنا، لا يوجد شيء لمعالجته
+    // =========================
+    // STEP 2: مزامنة trades.json مع cTrader
+    // =========================
+
+    // إذا لا توجد صفقات مفتوحة في cTrader
+    if (!positions || positions.length === 0) {
+      if (trades.length > 0) {
+        console.log('🧹 [Sync] No open positions on cTrader. Clearing trades.json');
+        saveToFile('trades.json', []);
       }
-      
-      // مطابقة الصفقات المفتوحة مع المسجلة في الملف
+      return;
+    }
+
+    // إذا توجد صفقات في الملف، طابقها مع الصفقات الحية
+    if (trades.length > 0) {
       const syncedTrades = syncTradesWithBroker(positions, trades);
-      
-      // إذا حدث تغيير، نحفظ الملف فوراً قبل إكمال العمليات
+
       if (syncedTrades.length !== trades.length) {
+        console.log('🧹 [Sync] trades.json updated after broker sync');
         trades = syncedTrades;
         saveToFile('trades.json', trades);
       }
     }
 
-    // إذا لم تكن هناك صفقات في المنصة أصلاً، نتوقف
-    if (!positions || positions.length === 0) return;
+    // =========================
+    // STEP 3: تحديث الكاش
+    // =========================
+    livePositionsCache = positions;
+    lastPositionsUpdateAt = now();
 
-    // --- نهاية عملية المطابقة ---
+    // =========================
+    // STEP 4: حماية الإدارة التلقائية
+    // =========================
+    if (process.env.AUTO_MANAGEMENT_ENABLED !== 'true') {
+      console.log('🟡 Auto management disabled. Sync only.');
+      return;
+    }
 
-    // تجميع الرموز (Symbols) الفريدة المفتوحة حالياً
+    // =========================
+    // STEP 5: تجميع الرموز المفتوحة
+    // =========================
     const uniqueSymbols = new Set();
+
     for (const p of positions) {
-      const symbolId = p.symbolId || p.tradeData?.symbolId || p.position?.symbolId;
+      const symbolId =
+        p.symbolId ||
+        p.tradeData?.symbolId ||
+        p.position?.symbolId;
+
       if (symbolId) uniqueSymbols.add(Number(symbolId));
     }
 
-    // معالجة كل رمز على حدة (Break Even, Trailing, AI Exit)
+    // =========================
+    // STEP 6: إدارة الصفقات الذكية
+    // =========================
     for (const symbolId of uniqueSymbols) {
       const symbolPositions = positions.filter(p => {
-        const pSymbolId = p.symbolId || p.tradeData?.symbolId || p.position?.symbolId;
+        const pSymbolId =
+          p.symbolId ||
+          p.tradeData?.symbolId ||
+          p.position?.symbolId;
+
         return Number(pSymbolId) === Number(symbolId);
       });
 
-      // تنفيذ المهام الذكية
-      await applyBreakEvenLogic(symbolId, symbolPositions, trades);
-      await applyTrailingStop(symbolId, symbolPositions, trades);
-      await smartExitAI(symbolId, symbolPositions, trades);
+      // Break Even
+      if (process.env.BREAK_EVEN_ENABLED === 'true') {
+        await applyBreakEvenLogic(symbolId, symbolPositions, trades);
+      }
+
+      // Trailing Stop
+      if (process.env.TRAILING_STOP_ENABLED === 'true') {
+        await applyTrailingStop(symbolId, symbolPositions, trades);
+      }
+
+      // Smart Exit AI
+      if (process.env.SMART_EXIT_ENABLED === 'true') {
+        await smartExitAI(symbolId, symbolPositions, trades);
+      }
     }
 
-    // حفظ أي تحديثات (مثل تغير حالة الـ breakEvenStatus في الملف)
+    // =========================
+    // STEP 7: حفظ التحديثات
+    // =========================
     saveToFile('trades.json', trades);
 
   } catch (err) {
     console.error('⚠️ [Engine Error]:', err.message);
   }
-}, 20000);// يعمل كل 10 ثوانٍ
-
+}, 20000); // يعمل كل 20 ثانية
 
 /* =========================
    AUTO TOKEN REFRESH LOGIC
