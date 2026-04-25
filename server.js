@@ -1285,32 +1285,44 @@ equity: accountInfo.equity,
 
 app.post('/close-all-positions', auth, async (req, res) => {
   try {
+    console.log('🚨 Closing all positions...');
+
     const positions = await getOpenPositionsFromCTrader();
 
     if (!positions || positions.length === 0) {
-      return res.json({
-        success: true,
-        count: 0,
-        message: 'لا توجد صفقات مفتوحة'
-      });
+      return res.json({ message: 'No open positions' });
     }
+
+    let closed = [];
 
     for (const p of positions) {
-      await closePosition(p.positionId);
+      try {
+        const positionId =
+          p.positionId ||
+          p.tradeData?.positionId ||
+          p.position?.positionId;
+
+        if (!positionId) continue;
+
+        console.log('Closing position:', positionId);
+
+        await closePosition(positionId); // تأكد هذه موجودة
+
+        closed.push(positionId);
+      } catch (err) {
+        console.error('Error closing position:', err.message);
+      }
     }
 
-    saveToFile('trades.json', []);
-
-    res.json({
+    return res.json({
       success: true,
-      count: positions.length
+      closedCount: closed.length,
+      closed
     });
 
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message
-    });
+  } catch (err) {
+    console.error('❌ Close all error:', err.message);
+    return res.status(500).json({ error: err.message });
   }
 });
 
