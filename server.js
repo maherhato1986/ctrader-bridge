@@ -465,7 +465,7 @@ const currentPrice = Number(
           profitDistance
         });
 
-        await modifyStopLoss(p, entryPrice);
+       await modifyStopLoss(p.positionId, entryPrice);
       }
     }
 
@@ -694,7 +694,7 @@ function updateEnvFile(newToken, newRefreshToken) {
   }
 }
 
-async function modifyStopLoss(positionId, stopLoss) {
+await modifyStopLoss(p.positionId, newSL) {
   if (MODE !== 'LIVE') {
     return { ok: true, simulated: true };
   }
@@ -1588,10 +1588,9 @@ async function getCTraderAccountInfo() {
       ws.send(JSON.stringify({
         clientMsgId: `app-auth-${Date.now()}`,
         payloadType: PT.APP_AUTH_REQ,
-        payload: {
-  ctidTraderAccountId: CTRADER_ACCOUNT_ID,
-  positionId: positionId,
-  volume: volume
+       payload: {
+  clientId: CTRADER_CLIENT_ID,
+  clientSecret: CTRADER_CLIENT_SECRET
 }
       }));
     });
