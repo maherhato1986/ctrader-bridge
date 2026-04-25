@@ -467,6 +467,26 @@ const currentPrice = Number(
 
        const buffer = atr * 0.1;
 
+         // تحديد اتجاه الصفقة (Buy / Sell)
+const isBuy =
+  String(
+    p.tradeData?.tradeSide ||
+    p.tradeSide ||
+    p.position?.tradeSide ||
+    ''
+  ).toUpperCase() === 'BUY';
+
+// حساب buffer (حماية بسيطة فوق نقطة الدخول)
+const buffer = atr * 0.1;
+
+// تنفيذ تعديل Stop Loss إلى Break Even + buffer
+await modifyStopLoss(
+  p.positionId,
+  isBuy
+    ? entryPrice + buffer   // Buy → نحط SL فوق الدخول
+    : entryPrice - buffer   // Sell → نحط SL تحت الدخول
+);
+
 
       }
     }
