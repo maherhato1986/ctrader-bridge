@@ -841,13 +841,31 @@ async function getAccount() {
   });
 }
 
+async function closePosition(positionId, volume) {
+  if (MODE !== 'LIVE') return { simulated: true };
 
-async function closePosition(positionId) {
   return new Promise((resolve, reject) => {
     const ws = new WebSocket(CTRADER_WS_URL);
+    let settled = false;
+
+    const timeout = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      try { ws.close(); } catch {}
+      reject(new Error('Close position timeout'));
+    }, 30000);
+
+    function finish(data) {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      try { ws.close(); } catch {}
+      resolve(data);
+    }
 
     ws.on('open', () => {
       ws.send(JSON.stringify({
+        clientMsgId: `close-app-auth-${Date.now()}`,
         payloadType: PT.APP_AUTH_REQ,
         payload: {
           clientId: CTRADER_CLIENT_ID,
@@ -861,28 +879,35 @@ async function closePosition(positionId) {
 
       if (msg.payloadType === PT.APP_AUTH_RES) {
         ws.send(JSON.stringify({
+          clientMsgId: `close-account-auth-${Date.now()}`,
           payloadType: PT.ACCOUNT_AUTH_REQ,
           payload: {
             ctidTraderAccountId: CTRADER_ACCOUNT_ID,
             accessToken: CTRADER_ACCESS_TOKEN
           }
         }));
+        return;
       }
 
       if (msg.payloadType === PT.ACCOUNT_AUTH_RES) {
         ws.send(JSON.stringify({
-          payloadType: PT.CLOSE_POSITION_REQ || 2108,
+          clientMsgId: `close-position-${Date.now()}`,
+          payloadType: PT.CLOSE_POSITION_REQ,
           payload: {
             ctidTraderAccountId: CTRADER_ACCOUNT_ID,
-            positionId: positionId
+            positionId: Number(positionId),
+            volume: Number(volume)
           }
         }));
+        return;
       }
 
-      if (msg.payloadType === PT.EXECUTION_EVENT) {
-        console.log('❌ Position closed:', positionId);
-        ws.close();
-        resolve(msg);
+      if (
+        msg.payloadType === PT.EXECUTION_EVENT ||
+        msg.payloadType === PT.ORDER_ERROR_EVENT ||
+        msg.payload?.errorCode
+      ) {
+        return finish(msg);
       }
     });
 
@@ -1306,7 +1331,12 @@ app.post('/close-all-positions', auth, async (req, res) => {
 
         console.log('Closing position:', positionId);
 
-        await closePosition(positionId); // تأكد هذه موجودة
+      const volume =
+  p.volume ||
+  p.tradeData?.volume ||
+  p.position?.volume;
+
+await closePosition(positionId, volume);
 
         closed.push(positionId);
       } catch (err) {
