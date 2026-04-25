@@ -25,6 +25,7 @@ app.get('/dashboard.html', dashboardAuth, (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'dashboard.html'));
 });
 
+// مهم جداً
 app.get('/dashboard.html/', (req, res) => {
   res.redirect('/dashboard.html');
 });
