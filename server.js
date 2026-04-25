@@ -7,6 +7,8 @@ const axios = require('axios');
 const path = require('path');
 const crypto = require('crypto');
 
+const { Resend } = require('resend');
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 const app = express();
 
@@ -2385,35 +2387,20 @@ async function verifyCode(){
 });
 
 app.post('/auth/request-code', async (req, res) => {
-  try {
-    const email = String(req.body.email || '').trim().toLowerCase();
-    const allowedEmail = String(process.env.ADMIN_EMAIL || '').trim().toLowerCase();
+  const { email } = req.body;
 
-    if (!email || email !== allowedEmail) {
-      return res.status(403).json({ ok: false, message: 'Email not allowed' });
-    }
+  const code = Math.floor(100000 + Math.random() * 900000);
 
-    const code = String(Math.floor(100000 + Math.random() * 900000));
-    const expireMinutes = Number(process.env.OTP_EXPIRE_MINUTES || 5);
+  // حفظ الكود (زي ما عندك)
 
-    const otps = readJson(OTP_FILE).filter(o => o.email !== email);
+  await resend.emails.send({
+    from: process.env.EMAIL_FROM,
+    to: process.env.EMAIL_TO,
+    subject: 'Trading Bot OTP',
+    html: `<h2>Code: ${code}</h2>`
+  });
 
-    otps.push({
-      email,
-      code,
-      createdAt: new Date().toISOString(),
-      expiresAt: new Date(Date.now() + expireMinutes * 60 * 1000).toISOString(),
-      ...getClientInfo(req)
-    });
-
-    writeJson(OTP_FILE, otps);
-
-    await sendOtpByFormSubmit(email, code, req);
-
-    return res.json({ ok: true, message: 'Code sent to email' });
-  } catch (err) {
-    return res.status(500).json({ ok: false, message: err.message });
-  }
+  res.json({ ok: true });
 });
 
 app.post('/auth/verify-code', (req, res) => {
