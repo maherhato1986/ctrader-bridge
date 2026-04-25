@@ -418,11 +418,6 @@ function findSymbolByScanWs({ search = 'XAU', batchSize = 500, maxAssetId = 1000
 
 
 
-
-
-
-
-
 async function applyBreakEvenLogic(symbolId, targetPositions = [], trades = []) {
   try {
     if (!Array.isArray(targetPositions) || targetPositions.length === 0) return;
@@ -433,7 +428,7 @@ async function applyBreakEvenLogic(symbolId, targetPositions = [], trades = []) 
         !t.exitReason
       );
 
-      if (!trade) continue;
+      if (!trade || trade.breakEvenDone) continue;
 
       const atr = Number(trade.atr || 0.5);
 
@@ -444,53 +439,44 @@ async function applyBreakEvenLogic(symbolId, targetPositions = [], trades = []) 
         0
       );
 
-const currentPrice = Number(
-  p.price ||
-  p.tradeData?.price ||
-  p.position?.price ||
-  0
-);
+      const currentPrice = Number(
+        p.price ||
+        p.tradeData?.price ||
+        p.position?.price ||
+        0
+      );
 
       if (!entryPrice || !currentPrice) continue;
 
-      const profitDistance = Math.abs(currentPrice - entryPrice);
+      const isBuy =
+        String(p.tradeData?.tradeSide || p.tradeSide || p.position?.tradeSide || '')
+          .toUpperCase() === 'BUY';
 
-      if (profitDistance >= atr * 1.2) {
-        console.log('🧠 BREAK EVEN TRIGGERED:', {
-          symbolId,
-          positionId: p.positionId,
-          entryPrice,
-          currentPrice,
-          atr,
-          profitDistance
-        });
+      const profitDistance = isBuy
+        ? currentPrice - entryPrice
+        : entryPrice - currentPrice;
 
-       const buffer = atr * 0.1;
+      if (profitDistance < atr * 1.2) continue;
 
-         // تحديد اتجاه الصفقة (Buy / Sell)
-const isBuy =
-  String(
-    p.tradeData?.tradeSide ||
-    p.tradeSide ||
-    p.position?.tradeSide ||
-    ''
-  ).toUpperCase() === 'BUY';
+      const buffer = atr * 0.1;
+      const newSL = isBuy ? entryPrice + buffer : entryPrice - buffer;
 
-// حساب buffer (حماية بسيطة فوق نقطة الدخول)
-const buffer = atr * 0.1;
+      console.log('🧠 BREAK EVEN TRIGGERED:', {
+        symbolId,
+        positionId: p.positionId,
+        entryPrice,
+        currentPrice,
+        atr,
+        profitDistance,
+        newSL
+      });
 
-// تنفيذ تعديل Stop Loss إلى Break Even + buffer
-await modifyStopLoss(
-  p.positionId,
-  isBuy
-    ? entryPrice + buffer   // Buy → نحط SL فوق الدخول
-    : entryPrice - buffer   // Sell → نحط SL تحت الدخول
-);
+      await modifyStopLoss(p.positionId, newSL);
 
-
-      }
+      trade.breakEvenDone = true;
+      trade.breakEvenAt = now();
+      trade.breakEvenSL = newSL;
     }
-
   } catch (err) {
     console.log('⚠️ Break-even error:', err.message);
   }
@@ -1516,6 +1502,48 @@ app.post('/close-all-positions', auth, async (req, res) => {
 });
 
 
+const HIGH_IMPACT_NEWS = [
+  { title: 'FOMC', currency: 'USD' },
+  { title: 'CPI', currency: 'USD' },
+  { title: 'NFP', currency: 'USD' },
+  { title: 'Nonfarm Payrolls', currency: 'USD' },
+  { title: 'Interest Rate Decision', currency: 'USD' },
+  { title: 'PPI', currency: 'USD' },
+  { title: 'Retail Sales', currency: 'USD' }
+];
+
+function isNewsBlackoutNow() {
+  if (process.env.NEWS_FILTER_ENABLED !== 'true') {
+    return { blocked: false, reason: 'News filter disabled' };
+  }
+
+  const nowTime = new Date();
+  const beforeMin = Number(process.env.NEWS_BLACKOUT_BEFORE_MINUTES || 30);
+  const afterMin = Number(process.env.NEWS_BLACKOUT_AFTER_MINUTES || 15);
+
+  // مؤقتًا نستخدم جدول يدوي إلى أن نربط API اقتصادي
+  const manualNews = [
+    // مثال:
+    // { title: 'FOMC', time: '2026-04-29T21:00:00+03:00', currency: 'USD', impact: 'high' }
+  ];
+
+  for (const event of manualNews) {
+    const eventTime = new Date(event.time);
+    const start = new Date(eventTime.getTime() - beforeMin * 60 * 1000);
+    const end = new Date(eventTime.getTime() + afterMin * 60 * 1000);
+
+    if (nowTime >= start && nowTime <= end) {
+      return {
+        blocked: true,
+        reason: `News blackout: ${event.title}`,
+        event
+      };
+    }
+  }
+
+  return { blocked: false, reason: 'No high impact news now' };
+}
+
 // =========================
 // TradingView Webhook
 // =========================
@@ -1548,6 +1576,19 @@ app.post('/webhook/tradingview', async (req, res) => {
         message: 'Missing data (symbol/action)'
       });
     }
+
+     const newsDecision = isNewsBlackoutNow();
+
+if (newsDecision.blocked) {
+  console.log('📰 NEWS FILTER BLOCKED SIGNAL:', newsDecision);
+
+  return res.status(423).json({
+    ok: false,
+    blocked: true,
+    reason: newsDecision.reason,
+    event: newsDecision.event || null
+  });
+}
 
     // ✅ بناء الإشارة
     const signal = buildSignal({
