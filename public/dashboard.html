@@ -88,7 +88,7 @@ th{color:#9fb2c8;font-weight:700}
       <table>
         <thead>
           <tr>
-            <th>Position ID</th><th>Symbol</th><th>Side</th><th>Volume</th><th>Price</th><th>Status</th>
+            <th>Position ID</th><th>Symbol</th><th>Side</th><th>Volume</th><th>Price</th><th>Status</th><th>Action</th>
           </tr>
         </thead>
         <tbody id="positionsBody"></tbody>
@@ -172,21 +172,29 @@ async function loadData(){
 
 function renderPositions(positions){
   const body = document.getElementById("positionsBody");
+
   if(!positions.length){
-    body.innerHTML = `<tr><td colspan="6">No open positions</td></tr>`;
+    body.innerHTML = `<tr><td colspan="7">No open positions</td></tr>`;
     return;
   }
 
-  body.innerHTML = positions.map(p => `
-    <tr>
-      <td>${p.positionId || "-"}</td>
-      <td>${p.symbolId || "XAUUSD"}</td>
-      <td><span class="tag buy">${p.side || "-"}</span></td>
-      <td>${p.volume || "-"}</td>
-      <td>${p.price || p.entryPrice || "-"}</td>
-      <td><span class="tag buy">ACTIVE</span></td>
-    </tr>
-  `).join("");
+  body.innerHTML = positions.map(p => {
+    const symbolName = p.symbol || (Number(p.symbolId) === 41 ? "XAUUSD" : p.symbolId || "-");
+
+    return `
+      <tr>
+        <td>${p.positionId || "-"}</td>
+        <td>${symbolName}</td>
+        <td><span class="tag buy">${p.side || "-"}</span></td>
+        <td>${p.volume || "-"}</td>
+        <td>${p.price || p.entryPrice || "-"}</td>
+        <td><span class="tag buy">ACTIVE</span></td>
+        <td>
+          <button class="btn close" onclick="closeOne('${p.positionId}', '${p.volume}')">Close</button>
+        </td>
+      </tr>
+    `;
+  }).join("");
 }
 
 function renderSignals(signals){
@@ -232,6 +240,23 @@ async function rejectSignal(id){
   loadData();
 }
 
+async function closeOne(positionId, volume){
+  if(!confirm("Close this position?")) return;
+
+  const res = await fetch('/close-position', {
+    method:'POST',
+    headers:{
+      'Content-Type':'application/json',
+      'x-api-key':API_KEY
+    },
+    body:JSON.stringify({ positionId, volume })
+  });
+
+  const data = await res.json();
+  addLog("Close position result: " + JSON.stringify(data), data.ok ? "green" : "red");
+  loadData();
+}
+  
 async function killAll(){
   if(!confirm("DANGER: Close all open positions?")) return;
   const res = await fetch('/close-all-positions', {
