@@ -1322,18 +1322,15 @@ app.post('/close-all-positions', auth, async (req, res) => {
 
     for (const p of positions) {
       try {
-        const positionId =
-          p.positionId ||
-          p.tradeData?.positionId ||
-          p.position?.positionId;
+       const positionId =
+  p.positionId ||
+  p.tradeData?.positionId ||
+  p.position?.positionId ||
+  p.tradeData?.positionId;
 
-        if (!positionId) continue;
-
-        console.log('Closing position:', positionId);
-
-      const volume =
-  p.volume ||
+const volume =
   p.tradeData?.volume ||
+  p.volume ||
   p.position?.volume;
 
 await closePosition(positionId, volume);
@@ -1480,9 +1477,10 @@ async function getCTraderAccountInfo() {
         clientMsgId: `app-auth-${Date.now()}`,
         payloadType: PT.APP_AUTH_REQ,
         payload: {
-          clientId: CTRADER_CLIENT_ID,
-          clientSecret: CTRADER_CLIENT_SECRET
-        }
+  ctidTraderAccountId: CTRADER_ACCOUNT_ID,
+  positionId: positionId,
+  volume: volume
+}
       }));
     });
 
