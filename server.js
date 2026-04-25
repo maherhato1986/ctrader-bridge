@@ -467,10 +467,7 @@ const currentPrice = Number(
 
        const buffer = atr * 0.1;
 
-await modifyStopLoss(
-  p.positionId,
-  isBuy ? entryPrice + buffer : entryPrice - buffer
-);
+
       }
     }
 
