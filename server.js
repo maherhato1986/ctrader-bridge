@@ -130,6 +130,18 @@ const CTRADER_WS_URL = `wss://${CTRADER_HOST}:${CTRADER_PORT}`;
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
 const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID || '';
 
+const nodemailer = require('nodemailer');
+
+let loginCodes = {};
+
+const transporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS
+  }
+});
+
 /* =========================
    PAYLOAD TYPES (نظيفة)
 ========================= */
@@ -1455,7 +1467,15 @@ async function executeOrder({ symbolId, side, volume }) {
 ========================= */
 
 
+app.post('/api/verify-code', (req, res) => {
+  const { email, code } = req.body;
 
+  if (loginCodes[email] == code) {
+    return res.json({ success: true });
+  }
+
+  res.json({ success: false });
+});
 
 app.get('/', (req, res) => {
   res.json({ ok: true, mode: MODE });
