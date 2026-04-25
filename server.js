@@ -68,6 +68,22 @@ let liveFreeMargin = 0;
 const pendingSignals = new Map();
 const executedSignals = new Set();
 let lastExecutionTime = 0;
+
+function isMarketClosedError(msg) {
+  const text = JSON.stringify(msg || {}).toLowerCase();
+  return text.includes('market is closed') || text.includes('only pending orders');
+}
+
+function extractPositionInfo(p) {
+  return {
+    positionId: Number(p.positionId || p.tradeData?.positionId || p.position?.positionId),
+    symbolId: Number(p.symbolId || p.tradeData?.symbolId || p.position?.symbolId),
+    volume: Number(p.tradeData?.volume || p.volume || p.position?.volume),
+    side: p.tradeData?.tradeSide || p.tradeSide || p.position?.tradeSide || '-',
+    entryPrice: p.entryPrice || p.tradeData?.entryPrice || p.position?.entryPrice || null,
+    raw: p
+  };
+}
 /* =========================
    HELPERS
 ========================= */
@@ -1310,46 +1326,64 @@ equity: accountInfo.equity,
 
 app.post('/close-all-positions', auth, async (req, res) => {
   try {
-    console.log('🚨 Closing all positions...');
-
     const positions = await getOpenPositionsFromCTrader();
 
     if (!positions || positions.length === 0) {
-      return res.json({ message: 'No open positions' });
+      return res.json({
+        ok: true,
+        message: 'No open positions',
+        closedCount: 0,
+        results: []
+      });
     }
 
-    let closed = [];
+    const results = [];
 
-    for (const p of positions) {
+    for (const rawPosition of positions) {
+      const p = extractPositionInfo(rawPosition);
+
       try {
-       const positionId =
-  p.positionId ||
-  p.tradeData?.positionId ||
-  p.position?.positionId ||
-  p.tradeData?.positionId;
+        console.log('🛑 CLOSING POSITION:', {
+          positionId: p.positionId,
+          symbolId: p.symbolId,
+          volume: p.volume
+        });
 
-const volume =
-  p.tradeData?.volume ||
-  p.volume ||
-  p.position?.volume;
+        const result = await closePosition(p.positionId, p.volume);
 
-await closePosition(positionId, volume);
+        results.push({
+          ok: !isMarketClosedError(result),
+          positionId: p.positionId,
+          symbolId: p.symbolId,
+          volume: p.volume,
+          marketClosed: isMarketClosedError(result),
+          result
+        });
 
-        closed.push(positionId);
       } catch (err) {
-        console.error('Error closing position:', err.message);
+        results.push({
+          ok: false,
+          positionId: p.positionId,
+          symbolId: p.symbolId,
+          volume: p.volume,
+          error: err.message
+        });
       }
     }
 
     return res.json({
-      success: true,
-      closedCount: closed.length,
-      closed
+      ok: true,
+      total: positions.length,
+      closedCount: results.filter(r => r.ok).length,
+      failedCount: results.filter(r => !r.ok).length,
+      results
     });
 
   } catch (err) {
-    console.error('❌ Close all error:', err.message);
-    return res.status(500).json({ error: err.message });
+    return res.status(500).json({
+      ok: false,
+      message: err.message
+    });
   }
 });
 
@@ -1865,6 +1899,77 @@ app.post('/reject', auth, async (req, res) => {
     });
   }
 });
+
+app.get('/positions', auth, async (req, res) => {
+  try {
+    const positions = await getOpenPositionsFromCTrader();
+
+    const formatted = positions.map(extractPositionInfo);
+
+    return res.json({
+      ok: true,
+      count: formatted.length,
+      positions: formatted
+    });
+  } catch (err) {
+    return res.status(500).json({
+      ok: false,
+      message: err.message
+    });
+  }
+});
+
+app.post('/close-position', auth, async (req, res) => {
+  try {
+    const { positionId, volume } = req.body;
+
+    if (!positionId) {
+      return res.status(400).json({
+        ok: false,
+        message: 'positionId is required'
+      });
+    }
+
+    let finalVolume = Number(volume || 0);
+
+    if (!finalVolume) {
+      const positions = await getOpenPositionsFromCTrader();
+      const found = positions.map(extractPositionInfo)
+        .find(p => Number(p.positionId) === Number(positionId));
+
+      if (!found) {
+        return res.status(404).json({
+          ok: false,
+          message: 'Position not found'
+        });
+      }
+
+      finalVolume = found.volume;
+    }
+
+    console.log('🛑 CLOSE POSITION REQUEST:', {
+      positionId,
+      volume: finalVolume
+    });
+
+    const result = await closePosition(positionId, finalVolume);
+
+    return res.json({
+      ok: !isMarketClosedError(result),
+      positionId: Number(positionId),
+      volume: finalVolume,
+      marketClosed: isMarketClosedError(result),
+      result
+    });
+
+  } catch (err) {
+    return res.status(500).json({
+      ok: false,
+      message: err.message
+    });
+  }
+});
+
 
 
 app.get('/ctrader/find-symbol', async (req, res) => {
