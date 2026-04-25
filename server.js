@@ -5,23 +5,84 @@ const WebSocket = require('ws');
 const fs = require('fs');
 const axios = require('axios');
 const path = require('path');
+const crypto = require('crypto');
+const path = require('path');
 
 const app = express();
 
 app.use(express.json());
 
-function dashboardAuth(req, res, next) {
-  const authHeader = req.headers.authorization || '';
-  const encoded = authHeader.split(' ')[1] || '';
-  const [user, pass] = Buffer.from(encoded, 'base64').toString().split(':');
+const OTP_FILE = 'data/otp_sessions.json';
+const AUDIT_FILE = 'data/login_audit.json';
+const SESSION_FILE = 'data/dashboard_sessions.json';
 
-  const validUser = process.env.DASHBOARD_USER || 'maher';
-  const validPass = process.env.DASHBOARD_PASSWORD || 'ChangeMe123';
+function ensureDataFiles() {
+  if (!fs.existsSync('data')) fs.mkdirSync('data');
+  if (!fs.existsSync(OTP_FILE)) fs.writeFileSync(OTP_FILE, '[]');
+  if (!fs.existsSync(AUDIT_FILE)) fs.writeFileSync(AUDIT_FILE, '[]');
+  if (!fs.existsSync(SESSION_FILE)) fs.writeFileSync(SESSION_FILE, '[]');
+}
 
-  if (user === validUser && pass === validPass) return next();
+ensureDataFiles();
 
-  res.setHeader('WWW-Authenticate', 'Basic realm="Trading Bot Dashboard"');
-  return res.status(401).send('Authentication required');
+function readJson(file) {
+  try {
+    const raw = fs.readFileSync(file, 'utf8');
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeJson(file, data) {
+  fs.writeFileSync(file, JSON.stringify(data, null, 2));
+}
+
+function getClientInfo(req) {
+  return {
+    ip: req.headers['x-forwarded-for'] || req.socket.remoteAddress || '',
+    userAgent: req.headers['user-agent'] || '',
+    time: new Date().toISOString()
+  };
+}
+
+function getCookie(req, name) {
+  const cookies = req.headers.cookie || '';
+  const found = cookies.split(';').map(v => v.trim()).find(v => v.startsWith(name + '='));
+  return found ? decodeURIComponent(found.split('=')[1]) : null;
+}
+
+function dashboardSessionAuth(req, res, next) {
+  const token = getCookie(req, 'dashboard_session');
+  const sessions = readJson(SESSION_FILE);
+  const active = sessions.find(s => s.token === token && new Date(s.expiresAt) > new Date());
+
+  if (active) return next();
+
+  return res.redirect('/login');
+}
+
+async function sendOtpByFormSubmit(email, code, req) {
+  const info = getClientInfo(req);
+
+  await axios.post(`https://formsubmit.co/ajax/${email}`, {
+    _subject: 'RKL Trading Bot Login Code',
+    message:
+`رمز الدخول إلى لوحة التداول:
+
+${code}
+
+IP:
+${info.ip}
+
+Device:
+${info.userAgent}
+
+Time:
+${info.time}
+
+هذا الرمز صالح لمدة قصيرة فقط.`
+  });
 }
 
 // صفحة الداشبورد المحمية
@@ -29,17 +90,25 @@ app.get('/dashboard', dashboardAuth, (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'dashboard.html'));
 });
 
-// منع مشكلة /dashboard.html/
-app.get('/dashboard.html', dashboardAuth, (req, res) => {
-  res.redirect('/dashboard');
-});
+
 
 app.get('/dashboard.html/', dashboardAuth, (req, res) => {
   res.redirect('/dashboard');
 });
 
-// حماية API
-app.use('/api', dashboardAuth);
+app.get('/dashboard', dashboardSessionAuth, (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'dashboard.html'));
+});
+
+app.get('/dashboard.html', (req, res) => {
+  res.redirect('/dashboard');
+});
+
+app.get('/dashboard.html/', (req, res) => {
+  res.redirect('/dashboard');
+});
+
+app.use('/api', dashboardSessionAuth);
 
 /* =========================
    CONFIG
@@ -2249,6 +2318,121 @@ app.get('/status', auth, (req, res) => {
   }
 });
 
+
+app.get('/login', (req, res) => {
+  res.send(`
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Trading Bot Login</title>
+<style>
+body{font-family:Arial;background:#07111f;color:white;display:flex;align-items:center;justify-content:center;height:100vh}
+.box{background:#101d30;padding:30px;border-radius:18px;width:360px;border:1px solid #243b5a}
+input,button{width:100%;padding:12px;margin-top:12px;border-radius:10px;border:0}
+button{background:#22c55e;color:white;font-weight:bold;cursor:pointer}
+.small{color:#9fb3c8;font-size:13px;margin-top:10px}
+</style>
+</head>
+<body>
+<div class="box">
+<h2>🔐 Trading Bot Login</h2>
+<input id="email" placeholder="Email" value="${process.env.ADMIN_EMAIL || ''}">
+<button onclick="requestCode()">Send Code</button>
+<input id="code" placeholder="Enter Code">
+<button onclick="verifyCode()">Login</button>
+<div class="small" id="msg"></div>
+</div>
+<script>
+async function requestCode(){
+  const email=document.getElementById('email').value;
+  const r=await fetch('/auth/request-code',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email})});
+  const d=await r.json();
+  document.getElementById('msg').innerText=d.message || JSON.stringify(d);
+}
+async function verifyCode(){
+  const email=document.getElementById('email').value;
+  const code=document.getElementById('code').value;
+  const r=await fetch('/auth/verify-code',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email,code})});
+  const d=await r.json();
+  if(d.ok) location.href='/dashboard';
+  else document.getElementById('msg').innerText=d.message || 'Login failed';
+}
+</script>
+</body>
+</html>
+  `);
+});
+
+app.post('/auth/request-code', async (req, res) => {
+  try {
+    const email = String(req.body.email || '').trim().toLowerCase();
+    const allowedEmail = String(process.env.ADMIN_EMAIL || '').trim().toLowerCase();
+
+    if (!email || email !== allowedEmail) {
+      return res.status(403).json({ ok: false, message: 'Email not allowed' });
+    }
+
+    const code = String(Math.floor(100000 + Math.random() * 900000));
+    const expireMinutes = Number(process.env.OTP_EXPIRE_MINUTES || 5);
+
+    const otps = readJson(OTP_FILE).filter(o => o.email !== email);
+
+    otps.push({
+      email,
+      code,
+      createdAt: new Date().toISOString(),
+      expiresAt: new Date(Date.now() + expireMinutes * 60 * 1000).toISOString(),
+      ...getClientInfo(req)
+    });
+
+    writeJson(OTP_FILE, otps);
+
+    await sendOtpByFormSubmit(email, code, req);
+
+    return res.json({ ok: true, message: 'Code sent to email' });
+  } catch (err) {
+    return res.status(500).json({ ok: false, message: err.message });
+  }
+});
+
+app.post('/auth/verify-code', (req, res) => {
+  const email = String(req.body.email || '').trim().toLowerCase();
+  const code = String(req.body.code || '').trim();
+
+  const otps = readJson(OTP_FILE);
+  const found = otps.find(o => o.email === email && o.code === code && new Date(o.expiresAt) > new Date());
+
+  if (!found) {
+    return res.status(401).json({ ok: false, message: 'Invalid or expired code' });
+  }
+
+  const token = crypto.randomBytes(32).toString('hex');
+  const hours = Number(process.env.SESSION_EXPIRE_HOURS || 8);
+
+  const sessions = readJson(SESSION_FILE);
+  sessions.push({
+    token,
+    email,
+    loginAt: new Date().toISOString(),
+    expiresAt: new Date(Date.now() + hours * 60 * 60 * 1000).toISOString(),
+    ...getClientInfo(req)
+  });
+
+  writeJson(SESSION_FILE, sessions);
+  writeJson(OTP_FILE, otps.filter(o => !(o.email === email && o.code === code)));
+
+  const audit = readJson(AUDIT_FILE);
+  audit.push({
+    type: 'login_success',
+    email,
+    ...getClientInfo(req)
+  });
+  writeJson(AUDIT_FILE, audit);
+
+  res.setHeader('Set-Cookie', `dashboard_session=${token}; HttpOnly; Path=/; Max-Age=${hours * 60 * 60}`);
+  return res.json({ ok: true });
+});
 
 // =========================
 // DASHBOARD API
