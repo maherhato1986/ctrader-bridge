@@ -7,7 +7,22 @@ const axios = require('axios');
 const app = express();
 app.use(express.json());
 const path = require('path');
-app.use(express.static(path.join(__dirname, 'public')));
+function dashboardAuth(req, res, next) {
+  const authHeader = req.headers.authorization || '';
+  const encoded = authHeader.split(' ')[1] || '';
+  const [user, pass] = Buffer.from(encoded, 'base64').toString().split(':');
+
+  const validUser = process.env.DASHBOARD_USER || 'maher';
+  const validPass = process.env.DASHBOARD_PASSWORD || 'ChangeMe123';
+
+  if (user === validUser && pass === validPass) return next();
+
+  res.setHeader('WWW-Authenticate', 'Basic realm="Trading Bot Dashboard"');
+  return res.status(401).send('Authentication required');
+}
+
+app.use('/dashboard.html', dashboardAuth, express.static(path.join(__dirname, 'public')));
+app.use('/api', dashboardAuth);
 
 /* =========================
    CONFIG
