@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Trading Bot Control Center</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;font-family:Inter,Arial,sans-serif;background:#07111f;color:#e5edf7}
+.app{display:flex;min-height:100vh}
+.sidebar{width:250px;background:#07101c;border-right:1px solid #1e3148;padding:18px}
+.logo{font-size:20px;font-weight:800;margin-bottom:25px;color:#fff}
+.logo small{display:block;font-size:12px;color:#8aa0b8;margin-top:4px}
+.nav a{display:block;padding:12px 14px;margin:6px 0;border-radius:10px;color:#b7c6d8;text-decoration:none}
+.nav a.active,.nav a:hover{background:#12325a;color:#fff}
+.kill{margin-top:25px;background:#7f1d1d;border:1px solid #ef4444;color:#fff;padding:16px;border-radius:12px;width:100%;font-weight:800;cursor:pointer}
+.statusBox{margin-top:18px;background:#0f1b2d;border:1px solid #21344f;border-radius:12px;padding:14px;font-size:13px}
+.statusBox b{color:#22c55e}
+.main{flex:1;padding:22px}
+.topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px}
+.badge{background:#0d2b1c;color:#22c55e;border:1px solid #14532d;padding:8px 14px;border-radius:8px;font-weight:700}
+.health{background:#0d1728;border:1px solid #263b59;padding:8px 14px;border-radius:8px;color:#a7f3d0}
+.grid{display:grid;gap:14px}
+.cards{grid-template-columns:repeat(5,1fr);margin-bottom:14px}
+.card{background:#101d30;border:1px solid #223650;border-radius:14px;padding:16px;box-shadow:0 8px 24px rgba(0,0,0,.2)}
+.card h4{margin:0 0 12px;color:#9fb2c8;font-size:13px}
+.value{font-size:24px;font-weight:800}
+.green{color:#22c55e}.red{color:#ef4444}.yellow{color:#f59e0b}.blue{color:#60a5fa}
+.content{grid-template-columns:1.2fr .8fr;margin-bottom:14px}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{padding:11px;border-bottom:1px solid #253852;text-align:left}
+th{color:#9fb2c8;font-weight:700}
+.tag{padding:4px 8px;border-radius:8px;font-size:12px;font-weight:700}
+.buy{background:#064e3b;color:#34d399}.sell{background:#7f1d1d;color:#fca5a5}
+.btn{border:0;border-radius:8px;padding:8px 11px;color:#fff;cursor:pointer;font-weight:700}
+.approve{background:#16a34a}.reject{background:#dc2626}.refresh{background:#2563eb}
+.close{background:#e11d48}
+.logs{height:170px;overflow:auto;font-size:13px;color:#cbd5e1}
+.log{padding:8px 0;border-bottom:1px solid #20334c}
+.footer{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+@media(max-width:1100px){.cards,.content,.footer{grid-template-columns:1fr}.sidebar{display:none}}
+</style>
+</head>
+<body>
+<div class="app">
+
+<aside class="sidebar">
+  <div class="logo">🛡️ TRADING BOT <small>Control Center</small></div>
+  <div class="nav">
+    <a class="active">Dashboard</a>
+    <a>Live Trading</a>
+    <a>Pending Signals</a>
+    <a>Positions</a>
+    <a>Orders History</a>
+    <a>Performance</a>
+    <a>News Filter</a>
+    <a>Risk Management</a>
+    <a>System Status</a>
+  </div>
+  <button class="kill" onclick="killAll()">🛑 KILL SWITCH<br><small>Close All Positions</small></button>
+  <div class="statusBox">
+    BOT STATUS<br><b id="botStatus">LIVE</b><br><br>
+    SERVER TIME<br><span id="serverTime">-</span><br><br>
+    VERSION<br>1.0.0
+  </div>
+</aside>
+
+<main class="main">
+  <div class="topbar">
+    <div>
+      <span class="badge">● LIVE TRADING</span>
+      <span class="health">System Health: OPTIMAL ●</span>
+    </div>
+    <button class="btn refresh" onclick="loadData()">Refresh</button>
+  </div>
+
+  <section class="grid cards">
+    <div class="card"><h4>TOTAL EQUITY</h4><div class="value" id="equity">$ -</div><small class="green">Live Account</small></div>
+    <div class="card"><h4>DAILY P&L</h4><div class="value green" id="dailyPnl">$ -</div><small>Floating Estimate</small></div>
+    <div class="card"><h4>OPEN POSITIONS</h4><div class="value" id="openCount">0</div><small class="blue" id="buySellCount">-</small></div>
+    <div class="card"><h4>PENDING SIGNALS</h4><div class="value yellow" id="pendingCount">0</div><small>Awaiting Approval</small></div>
+    <div class="card"><h4>MODE</h4><div class="value green" id="mode">LIVE</div><small>cTrader Bridge</small></div>
+  </section>
+
+  <section class="grid content">
+    <div class="card">
+      <h4>OPEN POSITIONS</h4>
+      <table>
+        <thead>
+          <tr>
+            <th>Position ID</th><th>Symbol</th><th>Side</th><th>Volume</th><th>Price</th><th>Status</th>
+          </tr>
+        </thead>
+        <tbody id="positionsBody"></tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <h4>SYSTEM STATUS</h4>
+      <table>
+        <tr><td>VPS Connection</td><td class="green">LIVE ●</td></tr>
+        <tr><td>cTrader API</td><td class="green">CONNECTED ●</td></tr>
+        <tr><td>Telegram Bot</td><td class="green">CONNECTED ●</td></tr>
+        <tr><td>News Filter</td><td class="green">ACTIVE ●</td></tr>
+        <tr><td>Data Sync</td><td class="green">SYNCED ●</td></tr>
+      </table>
+    </div>
+  </section>
+
+  <section class="grid content">
+    <div class="card">
+      <h4>PENDING APPROVALS</h4>
+      <table>
+        <thead>
+          <tr>
+            <th>Signal ID</th><th>Symbol</th><th>Side</th><th>Risk</th><th>Action</th>
+          </tr>
+        </thead>
+        <tbody id="signalsBody"></tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <h4>BOT LOGS</h4>
+      <div class="logs" id="logs"></div>
+    </div>
+  </section>
+
+  <section class="footer">
+    <div class="card"><h4>BROKER</h4>cTrader Open API <span class="green">●</span></div>
+    <div class="card"><h4>ACCOUNT</h4>Demo / USD</div>
+    <div class="card"><h4>SERVER LOCATION</h4>DigitalOcean NYC1</div>
+    <div class="card"><h4>DATA SYNC</h4>trades.json <span class="green">SYNCED ●</span></div>
+  </section>
+</main>
+</div>
+
+<script>
+const API_KEY = "maher123";
+
+function addLog(text, type="green"){
+  const logs = document.getElementById("logs");
+  const time = new Date().toLocaleTimeString();
+  logs.innerHTML = `<div class="log"><span class="${type}">●</span> ${time} - ${text}</div>` + logs.innerHTML;
+}
+
+async function loadData(){
+  try{
+    const res = await fetch('/api/dashboard', {
+      headers:{ 'x-api-key': API_KEY }
+    });
+    const data = await res.json();
+
+    if(!data.ok){
+      addLog(data.message || "Dashboard API error", "red");
+      return;
+    }
+
+    document.getElementById("mode").innerText = data.mode || "-";
+    document.getElementById("serverTime").innerText = data.serverTime || "-";
+    document.getElementById("openCount").innerText = data.positions?.length || 0;
+    document.getElementById("pendingCount").innerText = data.pending?.length || 0;
+
+    renderPositions(data.positions || []);
+    renderSignals(data.pending || []);
+    addLog("Dashboard synced successfully", "green");
+
+  }catch(e){
+    addLog("Connection error: " + e.message, "red");
+  }
+}
+
+function renderPositions(positions){
+  const body = document.getElementById("positionsBody");
+  if(!positions.length){
+    body.innerHTML = `<tr><td colspan="6">No open positions</td></tr>`;
+    return;
+  }
+
+  body.innerHTML = positions.map(p => `
+    <tr>
+      <td>${p.positionId || "-"}</td>
+      <td>${p.symbolId || "XAUUSD"}</td>
+      <td><span class="tag buy">${p.side || "-"}</span></td>
+      <td>${p.volume || "-"}</td>
+      <td>${p.price || p.entryPrice || "-"}</td>
+      <td><span class="tag buy">ACTIVE</span></td>
+    </tr>
+  `).join("");
+}
+
+function renderSignals(signals){
+  const body = document.getElementById("signalsBody");
+  if(!signals.length){
+    body.innerHTML = `<tr><td colspan="5">No pending signals</td></tr>`;
+    return;
+  }
+
+  body.innerHTML = signals.map(s => `
+    <tr>
+      <td>${s.signalId}</td>
+      <td>${s.symbol}</td>
+      <td><span class="tag ${s.action === 'sell' ? 'sell' : 'buy'}">${s.action}</span></td>
+      <td>${s.riskPercent ?? "-"}</td>
+      <td>
+        <button class="btn approve" onclick="approve('${s.signalId}')">✓</button>
+        <button class="btn reject" onclick="rejectSignal('${s.signalId}')">×</button>
+      </td>
+    </tr>
+  `).join("");
+}
+
+async function approve(id){
+  if(!confirm("Approve this signal?")) return;
+  await fetch('/approve', {
+    method:'POST',
+    headers:{ 'Content-Type':'application/json','x-api-key':API_KEY },
+    body:JSON.stringify({ signalId:id })
+  });
+  addLog("Signal approved: " + id, "green");
+  loadData();
+}
+
+async function rejectSignal(id){
+  if(!confirm("Reject this signal?")) return;
+  await fetch('/reject', {
+    method:'POST',
+    headers:{ 'Content-Type':'application/json','x-api-key':API_KEY },
+    body:JSON.stringify({ signalId:id })
+  });
+  addLog("Signal rejected: " + id, "yellow");
+  loadData();
+}
+
+async function killAll(){
+  if(!confirm("DANGER: Close all open positions?")) return;
+  const res = await fetch('/close-all-positions', {
+    method:'POST',
+    headers:{ 'x-api-key':API_KEY }
+  });
+  const data = await res.json();
+  addLog("Kill switch result: " + JSON.stringify(data), data.ok ? "green" : "red");
+  loadData();
+}
+
+loadData();
+setInterval(loadData, 7000);
+</script>
+</body>
+</html>
