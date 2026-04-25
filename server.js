@@ -1,12 +1,15 @@
 require('dotenv').config();
+
 const express = require('express');
 const WebSocket = require('ws');
 const fs = require('fs');
 const axios = require('axios');
+const path = require('path');
 
 const app = express();
+
 app.use(express.json());
-const path = require('path');
+
 function dashboardAuth(req, res, next) {
   const authHeader = req.headers.authorization || '';
   const encoded = authHeader.split(' ')[1] || '';
@@ -21,15 +24,21 @@ function dashboardAuth(req, res, next) {
   return res.status(401).send('Authentication required');
 }
 
-app.get('/dashboard.html', dashboardAuth, (req, res) => {
+// صفحة الداشبورد المحمية
+app.get('/dashboard', dashboardAuth, (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'dashboard.html'));
 });
 
-// مهم جداً
-app.get('/dashboard.html/', (req, res) => {
-  res.redirect('/dashboard.html');
+// منع مشكلة /dashboard.html/
+app.get('/dashboard.html', dashboardAuth, (req, res) => {
+  res.redirect('/dashboard');
 });
 
+app.get('/dashboard.html/', dashboardAuth, (req, res) => {
+  res.redirect('/dashboard');
+});
+
+// حماية API
 app.use('/api', dashboardAuth);
 
 /* =========================
