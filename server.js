@@ -6,6 +6,7 @@ const axios = require('axios');
 
 const app = express();
 app.use(express.json());
+app.use(express.static('public'));
 
 /* =========================
    CONFIG
@@ -1351,6 +1352,9 @@ async function executeOrder({ symbolId, side, volume }) {
    ROUTES
 ========================= */
 
+
+
+
 app.get('/', (req, res) => {
   res.json({ ok: true, mode: MODE });
 });
@@ -2212,6 +2216,48 @@ app.get('/status', auth, (req, res) => {
   }
 });
 
+
+// =========================
+// DASHBOARD API
+// =========================
+
+app.get('/api/dashboard', auth, async (req, res) => {
+  try {
+    const positions = await getOpenPositionsFromCTrader();
+
+    let pending = [];
+    if (fs.existsSync('pending_signals.json')) {
+      const raw = fs.readFileSync('pending_signals.json', 'utf8');
+      pending = raw ? JSON.parse(raw) : [];
+    }
+
+    let trades = [];
+    if (fs.existsSync('trades.json')) {
+      const raw = fs.readFileSync('trades.json', 'utf8');
+      trades = raw ? JSON.parse(raw) : [];
+    }
+
+    return res.json({
+      ok: true,
+      mode: MODE,
+      serverTime: now(),
+      positions: positions.map(p => ({
+        positionId: p.positionId,
+        symbolId: p.symbolId || p.tradeData?.symbolId,
+        volume: p.volume || p.tradeData?.volume,
+        price: p.price || p.tradeData?.price
+      })),
+      pending,
+      trades
+    });
+
+  } catch (err) {
+    return res.status(500).json({
+      ok: false,
+      message: err.message
+    });
+  }
+});
 
 app.get('/rejected', auth, (req, res) => {
   try {
