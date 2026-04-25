@@ -27,7 +27,13 @@ async function initTelegramBot() {
   console.log('✅ Telegram webhook deleted, polling mode active');
 }
 
+async function getPositions() {
+  const response = await axios.get(`${BRIDGE_URL}/positions`, {
+    headers: { 'x-api-key': API_KEY }
+  });
 
+  return response.data;
+}
 
 async function sendTelegramMessage(chatId, text, replyMarkup = null) {
   const payload = {
@@ -303,23 +309,31 @@ async function processMessageUpdate(update) {
   }
 
   // 2. أمر إغلاق جميع الصفقات (Emergency Close)
-  if (text === '/close_all') {
-    try {
-      await sendTelegramMessage(chatId, "⚠️ جاري محاولة إغلاق جميع الصفقات المفتوحة...");
-      const response = await axios.post(`${BRIDGE_URL}/close-all-positions`, {}, {
-        headers: { 'x-api-key': API_KEY }
-      });
-      
-      if (response.data.success) {
-        await sendTelegramMessage(chatId, `✅ تم إرسال أوامر الإغلاق لـ ${response.data.count} صفقة.`);
-      } else {
-        await sendTelegramMessage(chatId, `❌ لم يتم إغلاق الصفقات: ${response.data.message}`);
-      }
-    } catch (err) {
-      await sendTelegramMessage(chatId, "❌ خطأ أثناء محاولة إغلاق الصفقات.");
-    }
-    return;
+if (text === '/closeall') {
+  try {
+    await sendTelegramMessage(chatId, '⚠️ جاري محاولة إغلاق جميع الصفقات...');
+
+    const response = await axios.post(`${BRIDGE_URL}/close-all-positions`, {}, {
+      headers: { 'x-api-key': API_KEY }
+    });
+
+    const data = response.data;
+
+    await sendTelegramMessage(
+      chatId,
+      `🛑 نتيجة الإغلاق:
+Total: ${data.total ?? 0}
+Closed: ${data.closedCount ?? 0}
+Failed: ${data.failedCount ?? 0}
+
+${JSON.stringify(data.results || [], null, 2)}`
+    );
+
+  } catch (err) {
+    await sendTelegramMessage(chatId, `❌ فشل إغلاق الصفقات\n${err.response?.data?.message || err.message}`);
   }
+  return;
+}
 
   // --- الأوامر القديمة المرتبطة بالـ Parser ---
   const parsed = parseCommand(text);
@@ -344,6 +358,30 @@ async function processMessageUpdate(update) {
     );
     return;
   }
+
+  if (text === '/positions') {
+  try {
+    const data = await getPositions();
+
+    if (!data.positions || data.positions.length === 0) {
+      await sendTelegramMessage(chatId, '📭 لا توجد صفقات مفتوحة حالياً.');
+      return;
+    }
+
+    const lines = data.positions.map(p =>
+      `🆔 Position: ${p.positionId}
+📈 Symbol ID: ${p.symbolId}
+📊 Side: ${p.side}
+💰 Volume: ${p.volume}
+🎯 Entry: ${p.entryPrice ?? '-'}`
+    ).join('\n\n');
+
+    await sendTelegramMessage(chatId, `📊 الصفقات المفتوحة:\n\n${lines}`);
+  } catch (err) {
+    await sendTelegramMessage(chatId, `❌ فشل جلب الصفقات\n${err.response?.data?.message || err.message}`);
+  }
+  return;
+}
 
   if (parsed.error === 'missing_id') {
     await sendTelegramMessage(
