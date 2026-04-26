@@ -90,22 +90,7 @@ ${info.time}
   });
 }
 
-app.post('/auth/request-code', async (req, res) => {
-  const { email } = req.body;
 
-  const code = Math.floor(100000 + Math.random() * 900000);
-
-  // حفظ الكود (زي ما عندك)
-
-  await resend.emails.send({
-    from: process.env.EMAIL_FROM,
-    to: process.env.EMAIL_TO,
-    subject: 'Trading Bot OTP',
-    html: `<h2>Code: ${code}</h2>`
-  });
-
-  res.json({ ok: true });
-});
 
 /* =========================
    CONFIG
@@ -2398,7 +2383,6 @@ app.post('/auth/request-code', async (req, res) => {
   res.json({ ok: true });
 });
 
-const crypto = require('crypto');
 
 app.post('/auth/verify-code', (req, res) => {
   try {
