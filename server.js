@@ -2442,13 +2442,13 @@ app.post('/auth/verify-code', (req, res) => {
     sessions = sessions.filter(s => new Date(s.expiresAt) > now);
 
     // 🔹 إضافة جلسة جديدة
-    sessions.push({
-      token,
-      email,
-      loginAt: new Date().toISOString(),
-     expiresAt: new Date(Date.now() + 15 * 60 * 1000) // 15 دقيقة
-      ...getClientInfo(req)
-    });
+ sessions.push({
+  token,
+  email,
+  loginAt: new Date().toISOString(),
+  expiresAt: new Date(Date.now() + 15 * 60 * 1000),
+  ...getClientInfo(req)
+});
 
     writeJson(SESSION_FILE, sessions);
 
