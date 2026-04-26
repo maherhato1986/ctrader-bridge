@@ -41,8 +41,7 @@ app.get('/login', (req, res) => {
   `);
 });
 
-// static files
-// app.use(express.static(path.join(__dirname, 'public')));
+
 
 // =========================
 // FILES
@@ -2911,6 +2910,10 @@ function connectToCTrader() {
     console.log('❌ Main WebSocket error:', error.message);
   });
 }
+
+
+
+app.use(express.static(path.join(__dirname, 'public')));
 
 /* =========================
    START
