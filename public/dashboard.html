@@ -247,6 +247,20 @@ function renderSignals(signals){
     return;
   }
 
+  function loadTradingViewChart(){
+  const symbol = document.getElementById("chartSymbol").value;
+  const box = document.getElementById("chartBox");
+
+  box.innerHTML = `
+    <iframe
+      src="https://s.tradingview.com/widgetembed/?symbol=${encodeURIComponent(symbol)}&interval=15&theme=dark&style=1"
+      style="width:100%;height:100%;border:0"
+      allowtransparency="true"
+      scrolling="no">
+    </iframe>
+  `;
+}
+
   body.innerHTML = signals.map(s => `
     <tr>
       <td>${s.signalId}</td>
@@ -270,19 +284,7 @@ async function approve(id){
   });
   addLog("Signal approved: " + id, "green");
 
-function loadTradingViewChart(){
-  const symbol = document.getElementById("chartSymbol").value;
-  const box = document.getElementById("chartBox");
 
-  box.innerHTML = `
-    <iframe
-      src="https://s.tradingview.com/widgetembed/?symbol=${encodeURIComponent(symbol)}&interval=15&theme=dark&style=1"
-      style="width:100%;height:100%;border:0"
-      allowtransparency="true"
-      scrolling="no">
-    </iframe>
-  `;
-}
 
 loadTradingViewChart();
   
