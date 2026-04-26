@@ -18,6 +18,11 @@ const { Resend } = require('resend');
 // =========================
 const app = express();
 
+app.get('/test', (req, res) => {
+  console.log('🔥 TEST ROUTE HIT');
+  res.send('SERVER WORKING');
+});
+
 // =========================
 // SERVICES
 // =========================
