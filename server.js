@@ -1460,6 +1460,17 @@ app.post('/api/verify-code', (req, res) => {
   res.json({ success: false });
 });
 
+app.get('/login', (req, res) => {
+  res.send(`
+    <h2>Login Page</h2>
+    <form method="POST" action="/auth/login-password">
+      <input name="email" placeholder="email" />
+      <input name="password" type="password" placeholder="password" />
+      <button type="submit">Login</button>
+    </form>
+  `);
+});
+
 app.get('/', (req, res) => {
   res.json({ ok: true, mode: MODE });
 });
@@ -2368,9 +2379,6 @@ async function login(){
 `;
 }
 
-app.get('/login', (req, res) => {
-  res.send(loginPage());
-});
 
 app.get('/login.html', (req, res) => {
   res.redirect('/login');
