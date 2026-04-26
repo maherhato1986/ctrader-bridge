@@ -1513,19 +1513,43 @@ app.get('/api/dashboard', auth, async (req, res) => {
   try {
     const account = await getCTraderAccountInfo();
     const positions = await getOpenPositionsFromCTrader();
-
     const pending = Array.from(pendingSignals.values());
 
     let floatingPnL = 0;
 
-    positions.forEach(p => {
-      const profit =
-        p.unrealizedNetProfit ||
-        p.netProfit ||
-        p.position?.netProfit ||
+    const formattedPositions = positions.map(p => {
+      const info = extractPositionInfo(p);
+
+      const rawProfit =
+        p.netProfit ??
+        p.unrealizedNetProfit ??
+        p.moneyNetProfit ??
+        p.position?.netProfit ??
         0;
 
-      floatingPnL += Number(profit) / 100;
+      const moneyDigits =
+        p.moneyDigits ??
+        p.position?.moneyDigits ??
+        2;
+
+      floatingPnL += Number(rawProfit) / Math.pow(10, Number(moneyDigits || 2));
+
+      return {
+        positionId: info.positionId,
+        symbolId: info.symbolId,
+        symbol: Number(info.symbolId) === 41 ? 'XAUUSD' : String(info.symbolId || '-'),
+        volume: info.volume,
+        side: info.side,
+        price:
+          p.price ||
+          p.tradeData?.price ||
+          p.position?.price ||
+          p.tradeData?.entryPrice ||
+          p.entryPrice ||
+          '-',
+        entryPrice: info.entryPrice,
+        status: 'ACTIVE'
+      };
     });
 
     res.json({
@@ -1534,19 +1558,13 @@ app.get('/api/dashboard', auth, async (req, res) => {
       serverTime: new Date().toISOString(),
       equity: account.equity,
       balance: account.balance,
-      positions: positions.map(p => ({
-        positionId: p.positionId || p.tradeData?.positionId,
-        symbolId: p.symbolId || p.tradeData?.symbolId,
-        volume: p.volume || p.tradeData?.volume,
-        side: p.tradeSide || p.tradeData?.tradeSide,
-        price: p.price || p.tradeData?.price,
-        entryPrice: p.entryPrice || p.tradeData?.entryPrice
-      })),
+      positions: formattedPositions,
       pending,
       floatingPnL
     });
 
   } catch (err) {
+    console.error('DASHBOARD ERROR:', err);
     res.json({
       ok: false,
       message: err.message
