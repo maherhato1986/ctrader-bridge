@@ -2446,7 +2446,7 @@ app.post('/auth/verify-code', (req, res) => {
       token,
       email,
       loginAt: new Date().toISOString(),
-      expiresAt: new Date(Date.now() + hours * 60 * 60 * 1000).toISOString(),
+     expiresAt: new Date(Date.now() + 15 * 60 * 1000) // 15 دقيقة
       ...getClientInfo(req)
     });
 
