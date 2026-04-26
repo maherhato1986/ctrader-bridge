@@ -198,19 +198,20 @@ async function loadData(){
       return;
     }
 
-    document.getElementById("mode").innerText = data.mode || "-";
-    document.getElementById("serverTime").innerText = data.serverTime || "-";
-    document.getElementById("openCount").innerText = data.positions?.length || 0;
-    document.getElementById("pendingCount").innerText = data.pending?.length || 0;
-    document.getElementById("equity").innerText =
+   document.getElementById("mode").innerText = data.mode || "-";
+document.getElementById("serverTime").innerText = data.serverTime || "-";
+document.getElementById("openCount").innerText = data.positions?.length || 0;
+document.getElementById("pendingCount").innerText = data.pending?.length || 0;
+
+document.getElementById("equity").innerText =
   data.equity !== undefined ? "$ " + Number(data.equity).toFixed(2) : "$ -";
 
 document.getElementById("dailyPnl").innerText =
   data.floatingPnL !== undefined ? "$ " + Number(data.floatingPnL).toFixed(2) : "$ -";
 
-    renderPositions(data.positions || []);
-    renderSignals(data.pending || []);
-    addLog("Dashboard synced successfully", "green");
+renderPositions(data.positions || []);
+renderSignals(data.pending || []);
+addLog("Dashboard synced successfully", "green");
 
   }catch(e){
     addLog("Connection error: " + e.message, "red");
