@@ -5,6 +5,7 @@ const WebSocket = require('ws');
 const fs = require('fs');
 const axios = require('axios');
 const path = require('path');
+app.use(express.static(path.join(__dirname, 'public')));
 const crypto = require('crypto');
 
 const { Resend } = require('resend');
@@ -2371,10 +2372,14 @@ app.get('/login', (req, res) => {
   res.send(loginPage());
 });
 
-
 app.get('/login.html', (req, res) => {
-  res.send(loginPage());
+  res.redirect('/login');
 });
+
+app.get('/dashboard', dashboardSessionAuth, (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'dashboard.html'));
+});
+
 app.post('/auth/request-code', async (req, res) => {
   const { email } = req.body;
 
