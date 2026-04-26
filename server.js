@@ -41,7 +41,7 @@ app.get('/login', (req, res) => {
 });
 
 // static files
-app.use(express.static(path.join(__dirname, 'public')));
+// app.use(express.static(path.join(__dirname, 'public')));
 
 // =========================
 // FILES
