@@ -2321,8 +2321,8 @@ app.get('/status', auth, (req, res) => {
 });
 
 
-app.get('/login', (req, res) => {
-  res.send(`
+function loginPage() {
+  return `
 <!DOCTYPE html>
 <html>
 <head>
@@ -2339,33 +2339,42 @@ button{background:#22c55e;color:white;font-weight:bold;cursor:pointer}
 <body>
 <div class="box">
 <h2>🔐 Trading Bot Login</h2>
-<input id="email" placeholder="Email" value="${process.env.ADMIN_EMAIL || ''}">
-<button onclick="requestCode()">Send Code</button>
-<input id="code" placeholder="Enter Code">
-<button onclick="verifyCode()">Login</button>
+<input id="email" placeholder="Email" value="admin@rk-lifts.com">
+<input id="password" type="password" placeholder="Password">
+<button onclick="login()">Login</button>
 <div class="small" id="msg"></div>
 </div>
+
 <script>
-async function requestCode(){
-  const email=document.getElementById('email').value;
-  const r=await fetch('/auth/request-code',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email})});
-  const d=await r.json();
-  document.getElementById('msg').innerText=d.message || JSON.stringify(d);
-}
-async function verifyCode(){
-  const email=document.getElementById('email').value;
-  const code=document.getElementById('code').value;
-  const r=await fetch('/auth/verify-code',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email,code})});
-  const d=await r.json();
+async function login(){
+  const email = document.getElementById('email').value;
+  const password = document.getElementById('password').value;
+
+  const r = await fetch('/auth/login-password', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({email,password})
+  });
+
+  const d = await r.json();
+
   if(d.ok) location.href='/dashboard';
-  else document.getElementById('msg').innerText=d.message || 'Login failed';
+  else document.getElementById('msg').innerText = d.message || 'Login failed';
 }
 </script>
 </body>
 </html>
-  `);
+`;
+}
+
+app.get('/login', (req, res) => {
+  res.send(loginPage());
 });
 
+
+app.get('/login.html', (req, res) => {
+  res.send(loginPage());
+});
 app.post('/auth/request-code', async (req, res) => {
   const { email } = req.body;
 
@@ -2383,6 +2392,41 @@ app.post('/auth/request-code', async (req, res) => {
   res.json({ ok: true });
 });
 
+
+app.post('/auth/login-password', (req, res) => {
+  const email = String(req.body.email || '').trim().toLowerCase();
+  const password = String(req.body.password || '').trim();
+
+  const adminEmail = String(process.env.ADMIN_EMAIL || 'admin@rk-lifts.com').toLowerCase();
+  const adminPassword = String(process.env.DASHBOARD_PASSWORD || '123456');
+
+  if (email !== adminEmail || password !== adminPassword) {
+    return res.status(401).json({ ok: false, message: 'Invalid email or password' });
+  }
+
+  const token = crypto.randomBytes(32).toString('hex');
+  const hours = Number(process.env.SESSION_EXPIRE_HOURS || 8);
+
+  let sessions = readJson(SESSION_FILE) || [];
+  sessions = sessions.filter(s => new Date(s.expiresAt) > new Date());
+
+  sessions.push({
+    token,
+    email,
+    loginAt: new Date().toISOString(),
+    expiresAt: new Date(Date.now() + hours * 60 * 60 * 1000).toISOString(),
+    ...getClientInfo(req)
+  });
+
+  writeJson(SESSION_FILE, sessions);
+
+  res.setHeader(
+    'Set-Cookie',
+    `dashboard_session=${token}; HttpOnly; Path=/; Max-Age=${hours * 60 * 60}`
+  );
+
+  return res.json({ ok: true, message: 'Login successful' });
+});
 
 app.post('/auth/verify-code', (req, res) => {
   try {
