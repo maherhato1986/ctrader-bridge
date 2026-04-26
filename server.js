@@ -2403,7 +2403,11 @@ app.post('/auth/verify-code', (req, res) => {
   const code = String(req.body.code || '').trim();
 
   const otps = readJson(OTP_FILE);
-  const found = otps.find(o => o.email === email && o.code === code && new Date(o.expiresAt) > new Date());
+  const found = otps.find(o =>
+  o.email === email &&
+  String(o.code) === String(code) &&
+  new Date(o.expiresAt) > new Date()
+);
 
   if (!found) {
     return res.status(401).json({ ok: false, message: 'Invalid or expired code' });
