@@ -1,26 +1,45 @@
 require('dotenv').config();
 
+// =========================
+// IMPORTS
+// =========================
 const express = require('express');
 const WebSocket = require('ws');
 const fs = require('fs');
 const axios = require('axios');
 const path = require('path');
-app.use(express.static(path.join(__dirname, 'public')));
 const crypto = require('crypto');
 
+const cookieParser = require('cookie-parser');
 const { Resend } = require('resend');
-const resend = new Resend(process.env.RESEND_API_KEY);
 
+// =========================
+// APP INIT (مهم جداً يكون هنا)
+// =========================
 const app = express();
 
-app.use(express.json());
+// =========================
+// SERVICES
+// =========================
+const resend = new Resend(process.env.RESEND_API_KEY);
 
-const cookieParser = require('cookie-parser');
+// =========================
+// MIDDLEWARES (بعد تعريف app)
+// =========================
+app.use(express.json());
 app.use(cookieParser());
 
+// static files
+app.use(express.static(path.join(__dirname, 'public')));
+
+// =========================
+// FILES
+// =========================
 const OTP_FILE = 'data/otp_sessions.json';
 const AUDIT_FILE = 'data/login_audit.json';
 const SESSION_FILE = 'data/dashboard_sessions.json';
+
+
 
 function ensureDataFiles() {
   if (!fs.existsSync('data')) fs.mkdirSync('data');
