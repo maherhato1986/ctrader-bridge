@@ -53,6 +53,8 @@ const OTP_FILE = 'data/otp_sessions.json';
 const AUDIT_FILE = 'data/login_audit.json';
 const SESSION_FILE = 'data/dashboard_sessions.json';
 
+const AUDIT_EVENTS_FILE = 'data/audit_events.json';
+
 
 
 function ensureDataFiles() {
@@ -60,6 +62,7 @@ function ensureDataFiles() {
   if (!fs.existsSync(OTP_FILE)) fs.writeFileSync(OTP_FILE, '[]');
   if (!fs.existsSync(AUDIT_FILE)) fs.writeFileSync(AUDIT_FILE, '[]');
   if (!fs.existsSync(SESSION_FILE)) fs.writeFileSync(SESSION_FILE, '[]');
+  if (!fs.existsSync(AUDIT_EVENTS_FILE)) fs.writeFileSync(AUDIT_EVENTS_FILE, '[]');
 }
 
 ensureDataFiles();
@@ -83,6 +86,20 @@ function getClientInfo(req) {
     userAgent: req.headers['user-agent'] || '',
     time: new Date().toISOString()
   };
+}
+
+function logAuditEvent(req, action, details = {}) {
+  const events = readJson(AUDIT_EVENTS_FILE) || [];
+
+  events.push({
+    time: new Date().toISOString(),
+    action,
+    ip: req.headers['x-forwarded-for'] || req.socket.remoteAddress || '',
+    userAgent: req.headers['user-agent'] || '',
+    details
+  });
+
+  writeJson(AUDIT_EVENTS_FILE, events.slice(-300));
 }
 
 function getCookie(req, name) {
@@ -1523,6 +1540,13 @@ app.post('/signals', auth, async (req, res) => {
   }
 });
 
+app.get('/api/audit', dashboardSessionAuth, (req, res) => {
+  const events = readJson(AUDIT_EVENTS_FILE) || [];
+  res.json({
+    ok: true,
+    events: events.slice(-100).reverse()
+  });
+});
 
 // مسار جلب حالة الحساب والصفقات
 app.get('/account-status', async (req, res) => {
@@ -2461,6 +2485,8 @@ app.post('/auth/login-password', (req, res) => {
     'Set-Cookie',
     `dashboard_session=${token}; HttpOnly; Path=/; Max-Age=${hours * 60 * 60}`
   );
+
+  logAuditEvent(req, 'LOGIN_SUCCESS', { email });
 
   return res.json({ ok: true, message: 'Login successful' });
 });
