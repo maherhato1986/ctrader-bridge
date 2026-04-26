@@ -148,10 +148,14 @@ ${info.time}
 ========================= */
 const PORT = Number(process.env.PORT || 3000);
 const API_KEY = process.env.API_KEY || 'maher123';
+function auth(req, res, next) {
+  const serverApiKey = process.env.API_KEY || 'maher123';
 
+  if (req.headers['x-api-key'] !== serverApiKey) {
+    return res.status(401).json({ ok: false, message: 'Unauthorized' });
+  }
 
-if (!API_KEY) {
-  throw new Error('API_KEY missing in .env');
+  next();
 }
 
 const MODE = String(process.env.MODE || 'SIMULATION').toUpperCase();
