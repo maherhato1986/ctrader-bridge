@@ -1,4 +1,4 @@
-console.log('🔥 RUNNING THIS FILE:', __filename);
+console.log('🔥 NEW SERVER STARTED');
 
 
 require('dotenv').config();
