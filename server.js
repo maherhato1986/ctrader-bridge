@@ -2398,46 +2398,94 @@ app.post('/auth/request-code', async (req, res) => {
   res.json({ ok: true });
 });
 
+const crypto = require('crypto');
+
 app.post('/auth/verify-code', (req, res) => {
-  const email = String(req.body.email || '').trim().toLowerCase();
-  const code = String(req.body.code || '').trim();
+  try {
+    // 🔹 تنظيف المدخلات
+    const email = String(req.body.email || '').trim().toLowerCase();
+    const code = String(req.body.code || '').trim();
 
-  const otps = readJson(OTP_FILE);
-  const found = otps.find(o =>
-  o.email === email &&
-  String(o.code) === String(code) &&
-  new Date(o.expiresAt) > new Date()
-);
+    if (!email || !code) {
+      return res.status(400).json({ ok: false, message: 'Missing email or code' });
+    }
 
-  if (!found) {
-    return res.status(401).json({ ok: false, message: 'Invalid or expired code' });
+    // 🔹 قراءة OTPs
+    let otps = readJson(OTP_FILE) || [];
+
+    // 🔹 تنظيف الأكواد المنتهية
+    const now = new Date();
+    otps = otps.filter(o => new Date(o.expiresAt) > now);
+
+    writeJson(OTP_FILE, otps); // تحديث الملف بعد التنظيف
+
+    // 🔹 البحث عن الكود الصحيح
+    const found = otps.find(o =>
+      o.email === email &&
+      String(o.code) === code
+    );
+
+    if (!found) {
+      return res.status(401).json({
+        ok: false,
+        message: 'Invalid or expired code'
+      });
+    }
+
+    // 🔐 إنشاء Session
+    const token = crypto.randomBytes(32).toString('hex');
+    const hours = Number(process.env.SESSION_EXPIRE_HOURS || 8);
+
+    let sessions = readJson(SESSION_FILE) || [];
+
+    // 🔹 تنظيف الجلسات المنتهية
+    sessions = sessions.filter(s => new Date(s.expiresAt) > now);
+
+    // 🔹 إضافة جلسة جديدة
+    sessions.push({
+      token,
+      email,
+      loginAt: new Date().toISOString(),
+      expiresAt: new Date(Date.now() + hours * 60 * 60 * 1000).toISOString(),
+      ...getClientInfo(req)
+    });
+
+    writeJson(SESSION_FILE, sessions);
+
+    // 🔥 حذف OTP المستخدم فقط
+    const remainingOtps = otps.filter(o =>
+      !(o.email === email && String(o.code) === code)
+    );
+    writeJson(OTP_FILE, remainingOtps);
+
+    // 🧾 Audit log
+    let audit = readJson(AUDIT_FILE) || [];
+    audit.push({
+      type: 'login_success',
+      email,
+      time: new Date().toISOString(),
+      ...getClientInfo(req)
+    });
+    writeJson(AUDIT_FILE, audit);
+
+    // 🍪 Cookie
+    res.setHeader(
+      'Set-Cookie',
+      `dashboard_session=${token}; HttpOnly; Path=/; Max-Age=${hours * 60 * 60}`
+    );
+
+    return res.json({
+      ok: true,
+      message: 'Login successful'
+    });
+
+  } catch (err) {
+    console.error('VERIFY CODE ERROR:', err);
+    return res.status(500).json({
+      ok: false,
+      message: 'Server error'
+    });
   }
-
-  const token = crypto.randomBytes(32).toString('hex');
-  const hours = Number(process.env.SESSION_EXPIRE_HOURS || 8);
-
-  const sessions = readJson(SESSION_FILE);
-  sessions.push({
-    token,
-    email,
-    loginAt: new Date().toISOString(),
-    expiresAt: new Date(Date.now() + hours * 60 * 60 * 1000).toISOString(),
-    ...getClientInfo(req)
-  });
-
-  writeJson(SESSION_FILE, sessions);
-  writeJson(OTP_FILE, otps.filter(o => !(o.email === email && o.code === code)));
-
-  const audit = readJson(AUDIT_FILE);
-  audit.push({
-    type: 'login_success',
-    email,
-    ...getClientInfo(req)
-  });
-  writeJson(AUDIT_FILE, audit);
-
-  res.setHeader('Set-Cookie', `dashboard_session=${token}; HttpOnly; Path=/; Max-Age=${hours * 60 * 60}`);
-  return res.json({ ok: true });
 });
 
 // =========================
