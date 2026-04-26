@@ -148,9 +148,11 @@ ${info.time}
 ========================= */
 const PORT = Number(process.env.PORT || 3000);
 const API_KEY = process.env.API_KEY;
-if (!process.env.API_KEY) {
+
+if (!API_KEY) {
   throw new Error('API_KEY missing in .env');
 }
+
 const MODE = String(process.env.MODE || 'SIMULATION').toUpperCase();
 
 /* =========================
@@ -2483,10 +2485,7 @@ app.get('/dashboard', dashboardSessionAuth, (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'dashboard.html'));
 });
 
-app.get('/dashboard', (req, res) => {
-  logAuditEvent(req, 'Opened Dashboard');
-  res.sendFile(path.join(__dirname, 'public', 'dashboard.html'));
-});
+
 
 app.post('/auth/request-code', async (req, res) => {
   const { email } = req.body;
