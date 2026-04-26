@@ -202,6 +202,11 @@ async function loadData(){
     document.getElementById("serverTime").innerText = data.serverTime || "-";
     document.getElementById("openCount").innerText = data.positions?.length || 0;
     document.getElementById("pendingCount").innerText = data.pending?.length || 0;
+    document.getElementById("equity").innerText =
+  data.equity !== undefined ? "$ " + Number(data.equity).toFixed(2) : "$ -";
+
+document.getElementById("dailyPnl").innerText =
+  data.floatingPnL !== undefined ? "$ " + Number(data.floatingPnL).toFixed(2) : "$ -";
 
     renderPositions(data.positions || []);
     renderSignals(data.pending || []);
