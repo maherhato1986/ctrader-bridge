@@ -44,7 +44,10 @@ app.get('/login', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'login.html'));
 });
 
-
+app.get('/dashboard', (req, res) => {
+  logAuditEvent(req, 'Opened Dashboard');
+  res.sendFile(path.join(__dirname, 'public', 'dashboard.html'));
+});
 
 // =========================
 // FILES
@@ -802,6 +805,11 @@ async function executeTradeWithAlert(params) {
     }
 }
 
+logAuditEvent(req, 'Trade Executed', {
+  symbol: signal.symbol,
+  volume: finalVolume,
+  action: signal.action
+});
 
 
 
@@ -1164,6 +1172,11 @@ async function closePosition(positionId, volume) {
     ws.on('error', reject);
   });
 }
+
+logAuditEvent(req, 'Closed Position', {
+  positionId: p.positionId,
+  volume: p.volume
+});
 
 // =========================
 // GET OPEN POSITIONS (محسّن)
@@ -1577,6 +1590,7 @@ equity: accountInfo.equity,
   }
 });
 
+logAuditEvent(req, 'KILL SWITCH ACTIVATED');
 
 app.post('/close-all-positions', auth, async (req, res) => {
   try {
@@ -1961,6 +1975,10 @@ app.post('/approve', auth, async (req, res) => {
     }
 
     console.log('📌 SIGNAL TO EXECUTE:', signal);
+    logAuditEvent(req, 'Execute Trade Start', {
+  symbol: signal.symbol,
+  action: signal.action
+});
 const nowTime = Date.now();
 
 if (nowTime - lastExecutionTime < 15000) {
