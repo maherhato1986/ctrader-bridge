@@ -29,6 +29,17 @@ const resend = new Resend(process.env.RESEND_API_KEY);
 app.use(express.json());
 app.use(cookieParser());
 
+app.get('/login', (req, res) => {
+  res.send(`
+    <h2>Login Page</h2>
+    <form method="POST" action="/auth/login-password">
+      <input name="email" placeholder="email" />
+      <input name="password" type="password" placeholder="password" />
+      <button type="submit">Login</button>
+    </form>
+  `);
+});
+
 // static files
 app.use(express.static(path.join(__dirname, 'public')));
 
@@ -1479,16 +1490,7 @@ app.post('/api/verify-code', (req, res) => {
   res.json({ success: false });
 });
 
-app.get('/login', (req, res) => {
-  res.send(`
-    <h2>Login Page</h2>
-    <form method="POST" action="/auth/login-password">
-      <input name="email" placeholder="email" />
-      <input name="password" type="password" placeholder="password" />
-      <button type="submit">Login</button>
-    </form>
-  `);
-});
+
 
 app.get('/', (req, res) => {
   res.json({ ok: true, mode: MODE });
