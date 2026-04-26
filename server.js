@@ -44,10 +44,7 @@ app.get('/login', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'login.html'));
 });
 
-app.get('/dashboard', (req, res) => {
-  logAuditEvent(req, 'Opened Dashboard');
-  res.sendFile(path.join(__dirname, 'public', 'dashboard.html'));
-});
+
 
 // =========================
 // FILES
@@ -150,7 +147,9 @@ ${info.time}
    CONFIG
 ========================= */
 const PORT = Number(process.env.PORT || 3000);
-const API_KEY = process.env.API_KEY || 'maher123';
+if (!process.env.API_KEY) {
+  throw new Error('API_KEY missing in .env');
+}
 const MODE = String(process.env.MODE || 'SIMULATION').toUpperCase();
 
 /* =========================
@@ -1602,67 +1601,47 @@ app.post('/close-all-positions', auth, async (req, res) => {
 
     const results = [];
 
-    for (const rawPosition of positions) {
-      const p = extractPositionInfo(rawPosition);
+ for (const rawPosition of positions) {
+  const p = extractPositionInfo(rawPosition);
 
-      if (!p.positionId || !p.volume) {
-        results.push({
-          ok: false,
-          positionId: p.positionId || null,
-          symbolId: p.symbolId || null,
-          volume: p.volume || null,
-          error: 'Missing positionId or volume'
-        });
-        continue;
-      }
+  if (!p.positionId || !p.volume) {
+    results.push({
+      ok: false,
+      positionId: p.positionId || null,
+      symbolId: p.symbolId || null,
+      volume: p.volume || null,
+      error: 'Missing positionId or volume'
+    });
+    continue;
+  }
 
-      try {
-        console.log('🛑 CLOSING POSITION:', {
-          positionId: p.positionId,
-          symbolId: p.symbolId,
-          volume: p.volume,
-          side: p.side
-        });
+  try {
+    const result = await closePosition(p.positionId, p.volume);
 
-        const result = await closePosition(p.positionId, p.volume);
+    // ✅ هنا مكانه الصحيح
+    logAuditEvent(req, 'Closed Position', {
+      positionId: p.positionId,
+      volume: p.volume
+    });
 
-        const marketClosed = isMarketClosedError(result);
-        const hasError =
-          marketClosed ||
-          result?.payload?.errorCode ||
-          result?.payload?.description ||
-          result?.errorCode;
+    results.push({
+      ok: true,
+      positionId: p.positionId,
+      volume: p.volume
+    });
 
-        results.push({
-          ok: !hasError,
-          positionId: p.positionId,
-          symbolId: p.symbolId,
-          volume: p.volume,
-          side: p.side,
-          marketClosed,
-          errorCode: result?.payload?.errorCode || result?.errorCode || null,
-          description: result?.payload?.description || result?.description || null,
-          result
-        });
-
-      } catch (err) {
-        results.push({
-          ok: false,
-          positionId: p.positionId,
-          symbolId: p.symbolId,
-          volume: p.volume,
-          side: p.side,
-          error: err.message
-        });
-      }
-    }
+  } catch (err) {
+    results.push({
+      ok: false,
+      positionId: p.positionId,
+      error: err.message
+    });
+  }
+}
 
     const closedCount = results.filter(r => r.ok).length;
     const failedCount = results.filter(r => !r.ok).length;
-logAuditEvent(req, 'Closed Position', {
-  positionId: p.positionId,
-  volume: p.volume
-});
+
     return res.json({
       ok: failedCount === 0,
       total: positions.length,
@@ -1978,7 +1957,9 @@ logAuditEvent(req, 'Execute Trade Start', {
  
 const nowTime = Date.now();
 
-if (nowTime - lastExecutionTime < 15000) {
+const EXECUTION_COOLDOWN = Number(process.env.EXECUTION_COOLDOWN || 15000);
+
+if (nowTime - lastExecutionTime < EXECUTION_COOLDOWN){
   console.log('⛔ Duplicate execution blocked');
   return res.status(429).json({
     ok: false,
