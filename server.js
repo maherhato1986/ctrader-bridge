@@ -241,6 +241,9 @@ function extractPositionInfo(p) {
 /* =========================
    HELPERS
 ========================= */
+
+const API_KEY = process.env.API_KEY;
+
 function auth(req, res, next) {
   if (req.headers['x-api-key'] !== API_KEY) {
     return res.status(401).json({ ok: false, message: 'Unauthorized' });
