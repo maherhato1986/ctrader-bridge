@@ -147,8 +147,7 @@ ${info.time}
    CONFIG
 ========================= */
 const PORT = Number(process.env.PORT || 3000);
-
-const API_KEY = process.env.API_KEY; // 🔥 هذا السطر الناقص
+const API_KEY = process.env.API_KEY || '';
 
 if (!API_KEY) {
   throw new Error('API_KEY missing in .env');
