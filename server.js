@@ -1540,7 +1540,7 @@ app.post('/signals', auth, async (req, res) => {
   }
 });
 
-app.get('/api/audit', dashboardSessionAuth, (req, res) => {
+app.get('/api/audit', (req, res) => {
   const events = readJson(AUDIT_EVENTS_FILE) || [];
   res.json({
     ok: true,
@@ -2090,6 +2090,11 @@ if (!positionDecision.allowed) {
 
 console.log('📊 ORDER RESULT:', result);
 
+    logAuditEvent(req, 'Executed Trade', {
+  symbol: signal.symbol,
+  volume: finalVolume,
+  action: signal.action
+});
     executedSignals.add(signalId);
     pendingSignals.delete(signalId);
 
@@ -2150,6 +2155,7 @@ const tradeRecord = {
     });
   }
 });
+
 
 app.post('/reject', auth, async (req, res) => {
   try {
@@ -2433,6 +2439,11 @@ app.get('/login.html', (req, res) => {
 });
 
 app.get('/dashboard', dashboardSessionAuth, (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'dashboard.html'));
+});
+
+app.get('/dashboard', (req, res) => {
+  logAuditEvent(req, 'Opened Dashboard');
   res.sendFile(path.join(__dirname, 'public', 'dashboard.html'));
 });
 
