@@ -805,11 +805,6 @@ async function executeTradeWithAlert(params) {
     }
 }
 
-logAuditEvent(req, 'Trade Executed', {
-  symbol: signal.symbol,
-  volume: finalVolume,
-  action: signal.action
-});
 
 
 
@@ -1173,10 +1168,7 @@ async function closePosition(positionId, volume) {
   });
 }
 
-logAuditEvent(req, 'Closed Position', {
-  positionId: p.positionId,
-  volume: p.volume
-});
+
 
 // =========================
 // GET OPEN POSITIONS (محسّن)
@@ -1590,9 +1582,10 @@ equity: accountInfo.equity,
   }
 });
 
-logAuditEvent(req, 'KILL SWITCH ACTIVATED');
+
 
 app.post('/close-all-positions', auth, async (req, res) => {
+  logAuditEvent(req, 'KILL SWITCH ACTIVATED');
   try {
     const positions = await getOpenPositionsFromCTrader();
 
@@ -1666,7 +1659,10 @@ app.post('/close-all-positions', auth, async (req, res) => {
 
     const closedCount = results.filter(r => r.ok).length;
     const failedCount = results.filter(r => !r.ok).length;
-
+logAuditEvent(req, 'Closed Position', {
+  positionId: p.positionId,
+  volume: p.volume
+});
     return res.json({
       ok: failedCount === 0,
       total: positions.length,
@@ -1975,10 +1971,11 @@ app.post('/approve', auth, async (req, res) => {
     }
 
     console.log('📌 SIGNAL TO EXECUTE:', signal);
-    logAuditEvent(req, 'Execute Trade Start', {
+logAuditEvent(req, 'Execute Trade Start', {
   symbol: signal.symbol,
   action: signal.action
 });
+ 
 const nowTime = Date.now();
 
 if (nowTime - lastExecutionTime < 15000) {
