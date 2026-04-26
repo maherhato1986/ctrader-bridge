@@ -147,7 +147,8 @@ ${info.time}
    CONFIG
 ========================= */
 const PORT = Number(process.env.PORT || 3000);
-const API_KEY = process.env.API_KEY || '';
+const API_KEY = process.env.API_KEY || 'maher123';
+
 
 if (!API_KEY) {
   throw new Error('API_KEY missing in .env');
