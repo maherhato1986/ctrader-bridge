@@ -188,9 +188,11 @@ function addLog(text, type="green"){
 }
 async function loadData(){
   try{
-    const res = await fetch('/api/dashboard', {
-      headers:{ 'x-api-key': API_KEY }
-    });
+   const res = await fetch('/api/dashboard', {
+  headers: {
+    'x-api-key': 'maher123'
+  }
+});
     const data = await res.json();
 
     if(!data.ok){
