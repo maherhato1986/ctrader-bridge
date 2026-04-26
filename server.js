@@ -1,4 +1,4 @@
-console.log('🔥 NEW SERVER STARTED');
+
 
 
 require('dotenv').config();
