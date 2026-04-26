@@ -82,6 +82,20 @@ th{color:#9fb2c8;font-weight:700}
     <div class="card"><h4>MODE</h4><div class="value green" id="mode">LIVE</div><small>cTrader Bridge</small></div>
   </section>
 
+  <section class="card" style="margin-bottom:14px">
+  <h4>LIVE CHART</h4>
+
+  <select id="chartSymbol" onchange="loadTradingViewChart()" style="padding:10px;border-radius:8px;margin-bottom:10px">
+    <option value="OANDA:XAUUSD">XAUUSD Gold</option>
+    <option value="NASDAQ:AAPL">Apple</option>
+    <option value="NASDAQ:TSLA">Tesla</option>
+    <option value="NASDAQ:NVDA">Nvidia</option>
+    <option value="NASDAQ:MSFT">Microsoft</option>
+  </select>
+
+  <div id="chartBox" style="height:420px;border-radius:14px;overflow:hidden;background:#07111f"></div>
+</section>
+
   <section class="grid content">
     <div class="card">
       <h4>OPEN POSITIONS</h4>
@@ -226,6 +240,23 @@ async function approve(id){
     body:JSON.stringify({ signalId:id })
   });
   addLog("Signal approved: " + id, "green");
+
+function loadTradingViewChart(){
+  const symbol = document.getElementById("chartSymbol").value;
+  const box = document.getElementById("chartBox");
+
+  box.innerHTML = `
+    <iframe
+      src="https://s.tradingview.com/widgetembed/?symbol=${encodeURIComponent(symbol)}&interval=15&theme=dark&style=1"
+      style="width:100%;height:100%;border:0"
+      allowtransparency="true"
+      scrolling="no">
+    </iframe>
+  `;
+}
+
+loadTradingViewChart();
+  
   loadData();
 }
 
