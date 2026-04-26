@@ -139,7 +139,20 @@ th{color:#9fb2c8;font-weight:700}
       <div class="logs" id="logs"></div>
     </div>
   </section>
-
+<section class="card" style="margin-top:14px">
+  <h4>ACCESS & ACTIVITY LOG</h4>
+  <table>
+    <thead>
+      <tr>
+        <th>Time</th>
+        <th>IP</th>
+        <th>Device</th>
+        <th>Action</th>
+      </tr>
+    </thead>
+    <tbody id="auditBody"></tbody>
+  </table>
+</section>
   <section class="footer">
     <div class="card"><h4>BROKER</h4>cTrader Open API <span class="green">●</span></div>
     <div class="card"><h4>ACCOUNT</h4>Demo / USD</div>
@@ -158,6 +171,21 @@ function addLog(text, type="green"){
   logs.innerHTML = `<div class="log"><span class="${type}">●</span> ${time} - ${text}</div>` + logs.innerHTML;
 }
 
+  async function loadAudit(){
+  const res = await fetch('/api/audit');
+  const data = await res.json();
+
+  if(!data.ok) return;
+
+  document.getElementById("auditBody").innerHTML = data.events.map(e => `
+    <tr>
+      <td>${e.time}</td>
+      <td>${e.ip}</td>
+      <td>${e.userAgent}</td>
+      <td>${e.action}</td>
+    </tr>
+  `).join("");
+}
 async function loadData(){
   try{
     const res = await fetch('/api/dashboard', {
@@ -182,6 +210,7 @@ async function loadData(){
   }catch(e){
     addLog("Connection error: " + e.message, "red");
   }
+  loadAudit();
 }
 
 function renderPositions(positions){
