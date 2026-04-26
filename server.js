@@ -14,6 +14,9 @@ const app = express();
 
 app.use(express.json());
 
+const cookieParser = require('cookie-parser');
+app.use(cookieParser());
+
 const OTP_FILE = 'data/otp_sessions.json';
 const AUDIT_FILE = 'data/login_audit.json';
 const SESSION_FILE = 'data/dashboard_sessions.json';
@@ -87,30 +90,22 @@ ${info.time}
   });
 }
 
-// صفحة الداشبورد المحمية
-app.get('/dashboard', dashboardAuth, (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'dashboard.html'));
+app.post('/auth/request-code', async (req, res) => {
+  const { email } = req.body;
+
+  const code = Math.floor(100000 + Math.random() * 900000);
+
+  // حفظ الكود (زي ما عندك)
+
+  await resend.emails.send({
+    from: process.env.EMAIL_FROM,
+    to: process.env.EMAIL_TO,
+    subject: 'Trading Bot OTP',
+    html: `<h2>Code: ${code}</h2>`
+  });
+
+  res.json({ ok: true });
 });
-
-
-
-app.get('/dashboard.html/', dashboardAuth, (req, res) => {
-  res.redirect('/dashboard');
-});
-
-app.get('/dashboard', dashboardSessionAuth, (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'dashboard.html'));
-});
-
-app.get('/dashboard.html', (req, res) => {
-  res.redirect('/dashboard');
-});
-
-app.get('/dashboard.html/', (req, res) => {
-  res.redirect('/dashboard');
-});
-
-app.use('/api', dashboardSessionAuth);
 
 /* =========================
    CONFIG
