@@ -27,6 +27,7 @@ const resend = new Resend(process.env.RESEND_API_KEY);
 // MIDDLEWARES (بعد تعريف app)
 // =========================
 app.use(express.json());
+app.use(express.urlencoded({ extended: true })); // 👈 هذا المهم
 app.use(cookieParser());
 
 app.get('/login', (req, res) => {
