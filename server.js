@@ -1504,6 +1504,50 @@ async function executeOrder({ symbolId, side, volume }) {
    ROUTES
 ========================= */
 
+app.get('/api/dashboard', auth, async (req, res) => {
+  try {
+    const account = await getCTraderAccountInfo();
+    const positions = await getOpenPositionsFromCTrader();
+
+    const pending = Array.from(pendingSignals.values());
+
+    let floatingPnL = 0;
+
+    positions.forEach(p => {
+      const profit =
+        p.unrealizedNetProfit ||
+        p.netProfit ||
+        p.position?.netProfit ||
+        0;
+
+      floatingPnL += Number(profit) / 100;
+    });
+
+    res.json({
+      ok: true,
+      mode: MODE,
+      serverTime: new Date().toISOString(),
+      equity: account.equity,
+      balance: account.balance,
+      positions: positions.map(p => ({
+        positionId: p.positionId || p.tradeData?.positionId,
+        symbolId: p.symbolId || p.tradeData?.symbolId,
+        volume: p.volume || p.tradeData?.volume,
+        side: p.tradeSide || p.tradeData?.tradeSide,
+        price: p.price || p.tradeData?.price,
+        entryPrice: p.entryPrice || p.tradeData?.entryPrice
+      })),
+      pending,
+      floatingPnL
+    });
+
+  } catch (err) {
+    res.json({
+      ok: false,
+      message: err.message
+    });
+  }
+});
 
 app.post('/api/verify-code', (req, res) => {
   const { email, code } = req.body;
