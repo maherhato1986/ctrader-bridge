@@ -1084,6 +1084,55 @@ function normalizeVolumeUnits(units) {
   return v;
 }
 
+async function aiTradeDecision(signal) {
+  try {
+    const prompt = `
+You are a professional gold trader.
+
+Analyze this signal and return JSON only:
+
+{
+  "decision": "BUY or SELL or REJECT",
+  "confidence": number (0-100),
+  "reason": "short explanation"
+}
+
+Signal:
+Symbol: ${signal.symbol}
+Action: ${signal.action}
+Risk: ${signal.riskPercent}
+SL: ${signal.stopLossUsd}
+TP: ${signal.takeProfitUsd}
+`;
+
+    const response = await axios.post('https://api.openai.com/v1/chat/completions', {
+      model: "gpt-4o-mini",
+      messages: [{ role: "user", content: prompt }],
+      temperature: 0.2
+    }, {
+      headers: {
+        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`
+      }
+    });
+
+    const text = response.data.choices[0].message.content;
+
+    const jsonStart = text.indexOf('{');
+    const jsonEnd = text.lastIndexOf('}');
+
+    if (jsonStart === -1 || jsonEnd === -1) {
+      throw new Error('AI response not valid JSON');
+    }
+
+    const parsed = JSON.parse(text.substring(jsonStart, jsonEnd + 1));
+
+    return parsed;
+
+  } catch (err) {
+    console.log('⚠️ AI decision error:', err.message);
+    return { decision: 'REJECT', confidence: 0, reason: 'AI error' };
+  }
+}
 
 function smartDecision(signal) {
   const hour = new Date().getHours();
@@ -2185,6 +2234,27 @@ app.post('/approve', auth, async (req, res) => {
     }
 
     console.log('📌 SIGNAL TO EXECUTE:', signal);
+
+    // =========================
+// 🧠 AI DECISION
+// =========================
+const aiDecision = await aiTradeDecision(signal);
+
+console.log('🤖 AI DECISION:', aiDecision);
+
+if (aiDecision.decision === 'REJECT' || aiDecision.confidence < 60) {
+  return res.status(403).json({
+    ok: false,
+    message: '❌ AI blocked trade',
+    aiDecision
+  });
+}
+
+// إذا الاتجاه مختلف
+if (aiDecision.decision !== signal.action.toUpperCase()) {
+  console.log('⚠️ AI changed direction');
+  signal.action = aiDecision.decision.toLowerCase();
+}
 logAuditEvent(req, 'Execute Trade Start', {
   symbol: signal.symbol,
   action: signal.action
