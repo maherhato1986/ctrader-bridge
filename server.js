@@ -2605,7 +2605,7 @@ const tradeRecord = {
 
     console.log('✅ TRADE SAVED:', tradeRecord);
 
-    await sendTradeAlertToTelegram('🚀 TRADE EXECUTED', {
+  await sendTradeAlertToTelegram('🚀 TRADE EXECUTED', {
   symbol: signal.symbol,
   action: signal.action,
   volume: finalVolume,
