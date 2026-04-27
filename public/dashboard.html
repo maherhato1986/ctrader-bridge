@@ -176,6 +176,13 @@ ws.onmessage = (event) => {
     // تحديث الربح
     document.getElementById("dailyPnl").innerText =
       "$ " + Number(data.floatingPnL).toFixed(2);
+    dashboardClients.forEach(ws => {
+  ws.send(JSON.stringify({
+    type: 'dashboard_update',
+    floatingPnL,
+    positions: formattedPositions
+  }));
+});
 
     // تحديث الصفقات
     let html = "";
