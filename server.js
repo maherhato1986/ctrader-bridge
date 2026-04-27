@@ -13,6 +13,12 @@ const axios = require('axios');
 const path = require('path');
 const crypto = require('crypto');
 
+const crypto = require('crypto');
+
+function now() {
+  return new Date().toISOString();
+}
+
 const cookieParser = require('cookie-parser');
 const { Resend } = require('resend');
 
