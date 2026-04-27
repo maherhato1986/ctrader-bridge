@@ -1809,15 +1809,23 @@ app.get('/api/dashboard', auth, async (req, res) => {
 
     let floatingPnL = 0;
 
-const formattedPositions = positions.map(p => {
+const formattedPositions = await Promise.all(positions.map(async p => {
   const info = extractPositionInfo(p);
 
-  const currentPrice = Number(
+  let currentPrice = 0;
+
+try {
+  currentPrice = await getLiveSpotPriceFromCTrader(info.symbolId);
+} catch (err) {
+  console.log('⚠️ Live price fallback');
+
+  currentPrice = Number(
     p.price ||
     p.tradeData?.price ||
     p.position?.price ||
     0
   );
+}
 
   const entryPrice = Number(info.entryPrice || 0);
   const volumeUnits = Number(info.volume || 0);
