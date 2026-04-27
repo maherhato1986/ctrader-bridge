@@ -1870,7 +1870,9 @@ try {
   // حجم العقد للذهب
   const contractSize = 100;
 
-const tradeSide = Number(info.side);
+const tradeSide =
+  String(info.side).toUpperCase().includes('SELL') ? 2 :
+  String(info.side).toUpperCase().includes('BUY') ? 1 : 0;
 const actualPrice = Number(p.price || currentPrice || 0);
 const moneyDigits = Number(p.moneyDigits || 2);
 
