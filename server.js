@@ -13,7 +13,7 @@ const axios = require('axios');
 const path = require('path');
 const crypto = require('crypto');
 
-const crypto = require('crypto');
+
 
 function now() {
   return new Date().toISOString();
@@ -221,6 +221,9 @@ CLOSE_POSITION_REQ: Number(process.env.PT_CLOSE_POSITION_REQ || 2111),
   ORDER_ERROR_EVENT: 2132
 };
 
+let livePrices = {};
+let priceWs = null;
+
 /* =========================
    STATE
 ========================= */
@@ -255,7 +258,84 @@ function extractPositionInfo(p) {
    HELPERS
 ========================= */
 
+function startLivePriceStream() {
+  if (priceWs) {
+    try { priceWs.close(); } catch {}
+  }
 
+  priceWs = new WebSocket(CTRADER_WS_URL);
+
+  priceWs.on('open', () => {
+    console.log('📡 Live Price Engine Started');
+
+    priceWs.send(JSON.stringify({
+      clientMsgId: `app-auth-${Date.now()}`,
+      payloadType: PT.APP_AUTH_REQ,
+      payload: {
+        clientId: CTRADER_CLIENT_ID,
+        clientSecret: CTRADER_CLIENT_SECRET
+      }
+    }));
+  });
+
+  priceWs.on('message', (raw) => {
+    const msg = JSON.parse(raw.toString());
+
+    // AUTH
+    if (msg.payloadType === PT.APP_AUTH_RES) {
+      priceWs.send(JSON.stringify({
+        clientMsgId: `account-auth-${Date.now()}`,
+        payloadType: PT.ACCOUNT_AUTH_REQ,
+        payload: {
+          ctidTraderAccountId: CTRADER_ACCOUNT_ID,
+          accessToken: CTRADER_ACCESS_TOKEN
+        }
+      }));
+      return;
+    }
+
+    // SUBSCRIBE
+    if (msg.payloadType === PT.ACCOUNT_AUTH_RES) {
+      priceWs.send(JSON.stringify({
+        clientMsgId: `sub-${Date.now()}`,
+        payloadType: PT.SUBSCRIBE_SPOTS_REQ,
+        payload: {
+          ctidTraderAccountId: CTRADER_ACCOUNT_ID,
+          symbolId: [41] // XAUUSD
+        }
+      }));
+      return;
+    }
+
+    // LIVE PRICE
+    const payload = msg.payload || {};
+    const bidRaw = payload.bid ?? payload.spotEvent?.bid;
+    const askRaw = payload.ask ?? payload.spotEvent?.ask;
+
+    if (bidRaw && askRaw) {
+      const digits = Number(process.env.CTRADER_PRICE_DIGITS || 2);
+
+      const bid = Number(bidRaw) / Math.pow(10, digits);
+      const ask = Number(askRaw) / Math.pow(10, digits);
+
+      const price = (bid + ask) / 2;
+
+      livePrices[41] = price;
+
+      // DEBUG
+      // console.log('🔥 LIVE PRICE:', price);
+    }
+  });
+
+  priceWs.on('close', () => {
+    console.log('⚠️ Price WS closed... reconnecting');
+    setTimeout(startLivePriceStream, 3000);
+  });
+
+  priceWs.on('error', (err) => {
+    console.log('❌ Price WS error:', err.message);
+  });
+}
 
 /* =========================
    STORAGE (بسيط)
@@ -783,12 +863,7 @@ async function smartExitAI(symbolId, targetPositions = [], trades = []) {
         0
       );
 
-      const currentPrice = Number(
-       p.price ||
-p.tradeData?.price ||
-p.position?.price ||
-0
-      );
+      const currentPrice = livePrices[info.symbolId] || 0;
 
       if (!entryPrice || !currentPrice) continue;
 
@@ -3334,7 +3409,7 @@ function connectToCTrader() {
   });
 }
 
-
+startLivePriceStream();
 
 
 
