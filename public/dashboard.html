@@ -248,7 +248,7 @@ document.getElementById("equity").innerText =
 document.getElementById("dailyPnl").innerText =
   data.floatingPnL !== undefined ? "$ " + Number(data.floatingPnL).toFixed(2) : "$ -";
 
-renderPositions(data.positions || []);
+
 renderSignals(data.pending || []);
 addLog("Dashboard synced successfully", "green");
 
