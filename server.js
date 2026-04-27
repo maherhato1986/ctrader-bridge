@@ -261,12 +261,45 @@ function isMarketClosedError(msg) {
 }
 
 function extractPositionInfo(p) {
+  const tradeData = p.tradeData || p.position?.tradeData || {};
+
   return {
-    positionId: Number(p.positionId || p.tradeData?.positionId || p.position?.positionId),
-    symbolId: Number(p.symbolId || p.tradeData?.symbolId || p.position?.symbolId),
-    volume: Number(p.tradeData?.volume || p.volume || p.position?.volume),
-    side: p.tradeData?.tradeSide || p.tradeSide || p.position?.tradeSide || '-',
-    entryPrice: p.entryPrice || p.tradeData?.entryPrice || p.position?.entryPrice || null,
+    positionId: Number(
+      p.positionId ||
+      tradeData.positionId ||
+      p.position?.positionId ||
+      0
+    ),
+
+    symbolId: Number(
+      p.symbolId ||
+      tradeData.symbolId ||
+      p.position?.symbolId ||
+      0
+    ),
+
+    volume: Number(
+      p.volume ||
+      tradeData.volume ||
+      p.position?.volume ||
+      0
+    ),
+
+    side:
+      p.tradeSide ||
+      tradeData.tradeSide ||
+      p.position?.tradeSide ||
+      "-",
+
+    entryPrice: Number(
+      p.entryPrice ||
+      tradeData.openPrice ||
+      tradeData.entryPrice ||
+      p.position?.entryPrice ||
+      p.price ||
+      0
+    ),
+
     raw: p
   };
 }
