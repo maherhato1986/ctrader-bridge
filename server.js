@@ -1581,7 +1581,14 @@ app.get('/api/dashboard', auth, async (req, res) => {
       const volumeUnits = Number(info.volume || 0);
       const sideNum = Number(info.side);
 
-      const goldMultiplier = volumeUnits / 100;
+      const contractSize = 100; // الذهب = 100 oz لكل لوت
+
+const lots = volumeUnits / 10000; // 1000 = 0.10 lot
+
+const grossProfit =
+  sideNum === 2
+    ? (entryPrice - currentPrice) * contractSize * lots
+    : (currentPrice - entryPrice) * contractSize * lots;
 
       const grossProfit =
         sideNum === 2
