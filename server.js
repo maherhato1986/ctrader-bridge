@@ -1755,6 +1755,14 @@ app.post('/close-all-positions', auth, async (req, res) => {
    
     const failedCount = results.filter(r => !r.ok).length;
 
+    await sendTradeAlertToTelegram('🚨 KILL SWITCH USED', {
+  symbol: 'ALL',
+  action: 'CLOSE_ALL',
+  volume: '-',
+  positionId: '-',
+  status: `Closed: ${closedCount} | Failed: ${failedCount}`
+});
+
     return res.json({
       ok: failedCount === 0,
       total: positions.length,
