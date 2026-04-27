@@ -647,12 +647,20 @@ async function applyBreakEvenLogic(symbolId, targetPositions = [], trades = []) 
         0
       );
 
-      const currentPrice = Number(
-        p.price ||
-        p.tradeData?.price ||
-        p.position?.price ||
-        0
-      );
+    let currentPrice = 0;
+
+try {
+  currentPrice = await getLiveSpotPriceFromCTrader(info.symbolId);
+} catch (err) {
+  console.log('⚠️ Live price failed, fallback used');
+
+  currentPrice = Number(
+    p.price ||
+    p.tradeData?.price ||
+    p.position?.price ||
+    0
+  );
+}
 
       if (!entryPrice || !currentPrice) continue;
 
