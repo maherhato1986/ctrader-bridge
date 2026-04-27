@@ -1585,15 +1585,13 @@ app.get('/api/dashboard', auth, async (req, res) => {
 
 const lots = volumeUnits / 10000; // 1000 = 0.10 lot
 
+const contractSize = 100;
+const lots = volumeUnits / 10000;
+
 const grossProfit =
   sideNum === 2
     ? (entryPrice - currentPrice) * contractSize * lots
     : (currentPrice - entryPrice) * contractSize * lots;
-
-      const grossProfit =
-        sideNum === 2
-          ? (entryPrice - currentPrice) * goldMultiplier
-          : (currentPrice - entryPrice) * goldMultiplier;
 
       const commission = Number(p.commission || p.position?.commission || 0) / 100;
       const swap = Number(p.swap || p.position?.swap || 0) / 100;
