@@ -1570,19 +1570,28 @@ app.get('/api/dashboard', auth, async (req, res) => {
     const formattedPositions = positions.map(p => {
       const info = extractPositionInfo(p);
 
-      const rawProfit =
-        p.netProfit ??
-        p.unrealizedNetProfit ??
-        p.moneyNetProfit ??
-        p.position?.netProfit ??
-        0;
+      const currentPrice = Number(
+        p.price ||
+        p.tradeData?.price ||
+        p.position?.price ||
+        0
+      );
 
-      const moneyDigits =
-        p.moneyDigits ??
-        p.position?.moneyDigits ??
-        2;
+      const entryPrice = Number(info.entryPrice || 0);
+      const volumeUnits = Number(info.volume || 0);
+      const sideNum = Number(info.side);
 
-      const netProfit = Number(rawProfit) / Math.pow(10, Number(moneyDigits || 2));
+      const goldMultiplier = volumeUnits / 100;
+
+      const grossProfit =
+        sideNum === 2
+          ? (entryPrice - currentPrice) * goldMultiplier
+          : (currentPrice - entryPrice) * goldMultiplier;
+
+      const commission = Number(p.commission || p.position?.commission || 0) / 100;
+      const swap = Number(p.swap || p.position?.swap || 0) / 100;
+
+      const netProfit = grossProfit + commission + swap;
 
       floatingPnL += netProfit;
 
@@ -1592,13 +1601,7 @@ app.get('/api/dashboard', auth, async (req, res) => {
         symbol: Number(info.symbolId) === 41 ? 'XAUUSD' : String(info.symbolId || '-'),
         volume: info.volume,
         side: info.side,
-        price:
-          p.price ||
-          p.tradeData?.price ||
-          p.position?.price ||
-          p.tradeData?.entryPrice ||
-          p.entryPrice ||
-          '-',
+        price: currentPrice || '-',
         entryPrice: info.entryPrice,
         netProfit,
         status: 'ACTIVE'
@@ -1624,7 +1627,6 @@ app.get('/api/dashboard', auth, async (req, res) => {
     });
   }
 });
-
 app.post('/api/verify-code', (req, res) => {
   const { email, code } = req.body;
 
