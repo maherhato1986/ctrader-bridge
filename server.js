@@ -1837,19 +1837,24 @@ try {
   // حجم العقد للذهب
   const contractSize = 100;
 
- const rawProfit =
-  p.netProfit ??
-  p.unrealizedNetProfit ??
-  p.position?.netProfit ??
-  p.position?.unrealizedNetProfit ??
-  0;
+const tradeSide = Number(info.side);
+const actualPrice = Number(p.price || currentPrice || 0);
+const moneyDigits = Number(p.moneyDigits || 2);
 
-const moneyDigits =
-  p.moneyDigits ??
-  p.position?.moneyDigits ??
-  2;
+let grossProfit = 0;
 
-const netProfit = Number(rawProfit) / Math.pow(10, moneyDigits);
+if (entryPrice && actualPrice && lots) {
+  if (tradeSide === 1) {
+    grossProfit = (actualPrice - entryPrice) * contractSize * lots;
+  } else if (tradeSide === 2) {
+    grossProfit = (entryPrice - actualPrice) * contractSize * lots;
+  }
+}
+
+const swap = Number(p.swap || 0) / Math.pow(10, moneyDigits);
+const commission = Number(p.commission || 0) / Math.pow(10, moneyDigits);
+
+const netProfit = grossProfit + swap + commission;
 
 floatingPnL += netProfit;
 
@@ -1870,7 +1875,7 @@ floatingPnL += netProfit;
     client.send(JSON.stringify({
       type: 'dashboard_update',
       floatingPnL,
-      positions: formattedPositions
+      positions: formattedPositions.filter(p => p && p.positionId)
     }));
   }
 });
@@ -2605,7 +2610,7 @@ const tradeRecord = {
 
     console.log('✅ TRADE SAVED:', tradeRecord);
 
- await sendTradeAlertToTelegram('🚀 TRADE EXECUTED', {
+await sendTradeAlertToTelegram('🚀 TRADE EXECUTED', {
   symbol: signal.symbol,
   action: signal.action,
   volume: finalVolume,
