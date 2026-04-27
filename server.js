@@ -305,11 +305,32 @@ async function sendSignalToTelegram(signal) {
     return;
   }
 
-  await telegramApi('sendMessage', {
-    chat_id: TELEGRAM_CHAT_ID,
-    text: buildTelegramSignalText(signal),
-    reply_markup: buildTelegramSignalButtons(signal.signalId)
-  });
+  try {
+    const text = `📡 إشارة جديدة
+
+🆔 Signal ID: ${signal.signalId}
+📊 Symbol: ${signal.symbol || '-'}
+📈 Action: ${signal.action || '-'}
+💰 Volume: ${signal.volume ?? '-'}
+⚠️ Risk %: ${signal.riskPercent ?? '-'}
+🛑 Stop Loss $: ${signal.stopLossUsd ?? '-'}
+🎯 Take Profit $: ${signal.takeProfitUsd ?? '-'}
+
+⏱ Time: ${new Date().toLocaleString()}
+📌 Status: ${signal.status || 'pending'}
+`;
+
+    await telegramApi('sendMessage', {
+      chat_id: TELEGRAM_CHAT_ID,
+      text,
+      reply_markup: buildTelegramSignalButtons(signal.signalId)
+    });
+
+    console.log(`📨 Signal sent to Telegram: ${signal.signalId}`);
+
+  } catch (err) {
+    console.log('❌ Telegram sendSignal error:', err.response?.data || err.message);
+  }
 }
 
 
@@ -1722,13 +1743,7 @@ app.post('/close-all-positions', auth, async (req, res) => {
 }
 
     const closedCount = results.filter(r => r.ok).length;
-    await sendTradeAlertToTelegram('🚨 KILL SWITCH USED', {
-  symbol: 'ALL',
-  action: 'CLOSE_ALL',
-  volume: '-',
-  positionId: '-',
-  status: `Closed: ${closedCount}`
-});
+   
     const failedCount = results.filter(r => !r.ok).length;
 
     return res.json({
@@ -2393,7 +2408,7 @@ app.post('/close-position', auth, async (req, res) => {
     const result = await closePosition(positionId, finalVolume);
 
     await sendTradeAlertToTelegram('🛑 POSITION CLOSED', {
-  symbol: 'XAUUSD',
+  symbol: found?.symbol || 'UNKNOWN',
   action: 'CLOSE',
   volume: finalVolume,
   positionId,
