@@ -312,6 +312,26 @@ async function sendSignalToTelegram(signal) {
   });
 }
 
+
+async function sendTradeAlertToTelegram(title, data = {}) {
+  if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID) return;
+
+  const text = `
+${title}
+
+Symbol: ${data.symbol || '-'}
+Action: ${data.action || '-'}
+Volume: ${data.volume || '-'}
+Position ID: ${data.positionId || '-'}
+Status: ${data.status || '-'}
+Time: ${new Date().toISOString()}
+`;
+
+  await telegramApi('sendMessage', {
+    chat_id: TELEGRAM_CHAT_ID,
+    text
+  });
+}
 /* =========================
    SIGNAL BUILDER
 ========================= */
@@ -1702,6 +1722,13 @@ app.post('/close-all-positions', auth, async (req, res) => {
 }
 
     const closedCount = results.filter(r => r.ok).length;
+    await sendTradeAlertToTelegram('🚨 KILL SWITCH USED', {
+  symbol: 'ALL',
+  action: 'CLOSE_ALL',
+  volume: '-',
+  positionId: '-',
+  status: `Closed: ${closedCount}`
+});
     const failedCount = results.filter(r => !r.ok).length;
 
     return res.json({
@@ -2196,6 +2223,14 @@ const tradeRecord = {
 
     console.log('✅ TRADE SAVED:', tradeRecord);
 
+    await sendTradeAlertToTelegram('🚀 TRADE EXECUTED', {
+  symbol: signal.symbol,
+  action: signal.action,
+  volume: finalVolume,
+  positionId: tradeRecord.positionId,
+  status: 'EXECUTED'
+});
+
     return res.json({
       ok: true,
       symbolId: finalSymbolId,
@@ -2356,6 +2391,14 @@ app.post('/close-position', auth, async (req, res) => {
     });
 
     const result = await closePosition(positionId, finalVolume);
+
+    await sendTradeAlertToTelegram('🛑 POSITION CLOSED', {
+  symbol: 'XAUUSD',
+  action: 'CLOSE',
+  volume: finalVolume,
+  positionId,
+  status: 'CLOSED'
+});
 
     return res.json({
       ok: !isMarketClosedError(result),
