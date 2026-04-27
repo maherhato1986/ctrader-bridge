@@ -189,8 +189,8 @@ ws.onmessage = (event) => {
           <td>-</td>
           <td>-</td>
           <td>-</td>
-          <td class="${p.profit >= 0 ? 'green' : 'red'}">
-            ${p.profit}
+          <td class="${Number(p.netProfit) >= 0 ? 'green' : 'red'}">
+            ${Number(p.netProfit || 0).toFixed(2)}
           </td>
           <td>ACTIVE</td>
           <td>-</td>
