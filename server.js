@@ -1864,7 +1864,7 @@ floatingPnL += netProfit;
     netProfit: Number(netProfit.toFixed(2)),
     status: 'ACTIVE'
   };
-});
+}));
     dashboardClients.forEach(client => {
   if (client.readyState === WebSocket.OPEN) {
     client.send(JSON.stringify({
