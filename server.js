@@ -261,44 +261,26 @@ function isMarketClosedError(msg) {
 }
 
 function extractPositionInfo(p) {
-  const tradeData = p.tradeData || p.position?.tradeData || {};
+  const tradeData = p.tradeData || {};
 
   return {
-    positionId: Number(
-      p.positionId ||
-      tradeData.positionId ||
-      p.position?.positionId ||
-      0
-    ),
+    positionId: Number(p.positionId || 0),
 
-    symbolId: Number(
-      p.symbolId ||
-      tradeData.symbolId ||
-      p.position?.symbolId ||
-      0
-    ),
+    symbolId: Number(tradeData.symbolId || 0),
 
-    volume: Number(
-      p.volume ||
-      tradeData.volume ||
-      p.position?.volume ||
-      0
-    ),
+    volume: Number(tradeData.volume || 0),
 
-    side:
-      p.tradeSide ||
-      tradeData.tradeSide ||
-      p.position?.tradeSide ||
-      "-",
+    side: Number(tradeData.tradeSide || 0),
 
-    entryPrice: Number(
-      p.entryPrice ||
-      tradeData.openPrice ||
-      tradeData.entryPrice ||
-      p.position?.entryPrice ||
-      p.price ||
-      0
-    ),
+    entryPrice: Number(tradeData.openPrice || 0),
+
+    currentPrice: Number(p.price || 0),
+
+    swap: Number(p.swap || 0),
+
+    commission: Number(p.commission || 0),
+
+    moneyDigits: Number(p.moneyDigits || 2),
 
     raw: p
   };
@@ -1873,8 +1855,8 @@ try {
 const tradeSide =
   String(info.side).toUpperCase().includes('SELL') ? 2 :
   String(info.side).toUpperCase().includes('BUY') ? 1 : 0;
-const actualPrice = Number(p.price || currentPrice || 0);
-const moneyDigits = Number(p.moneyDigits || 2);
+const actualPrice = Number(info.currentPrice || currentPrice || 0);
+const moneyDigits = Number(info.moneyDigits || 2);
 
 let grossProfit = 0;
 
@@ -1886,8 +1868,8 @@ if (entryPrice && actualPrice && lots) {
   }
 }
 
-const swap = Number(p.swap || 0) / Math.pow(10, moneyDigits);
-const commission = Number(p.commission || 0) / Math.pow(10, moneyDigits);
+const swap = Number(info.swap || 0) / Math.pow(10, moneyDigits);
+const commission = Number(info.commission || 0) / Math.pow(10, moneyDigits);
 
 const netProfit = grossProfit + swap + commission;
 
