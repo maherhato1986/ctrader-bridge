@@ -227,7 +227,7 @@ document.getElementById("equity").innerText =
 
 document.getElementById("dailyPnl").innerText =
   data.floatingPnL !== undefined ? "$ " + Number(data.floatingPnL).toFixed(2) : "$ -";
-
+renderPositions(data.positions || []);
 
 renderSignals(data.pending || []);
 addLog("Dashboard synced successfully", "green");
@@ -249,21 +249,33 @@ function renderPositions(positions){
   body.innerHTML = positions.map(p => {
     const symbolName = p.symbol || (Number(p.symbolId) === 41 ? "XAUUSD" : p.symbolId || "-");
 
+    const sideText =
+      String(p.side).toUpperCase().includes("SELL") || Number(p.side) === 2
+        ? "SELL"
+        : String(p.side).toUpperCase().includes("BUY") || Number(p.side) === 1
+          ? "BUY"
+          : "-";
+
     return `
       <tr>
         <td>${p.positionId || "-"}</td>
         <td>${symbolName}</td>
+
         <td>
-  <span class="tag ${Number(p.side) === 2 ? 'sell' : 'buy'}">
-    ${Number(p.side) === 2 ? 'SELL' : 'BUY'}
-  </span>
-</td>
+          <span class="tag ${sideText === 'SELL' ? 'sell' : sideText === 'BUY' ? 'buy' : ''}">
+            ${sideText}
+          </span>
+        </td>
+
         <td>${p.volume || "-"}</td>
         <td>${p.price || p.entryPrice || "-"}</td>
+
         <td class="${Number(p.netProfit) >= 0 ? 'green' : 'red'}">
-  ${p.netProfit !== undefined ? Number(p.netProfit).toFixed(2) : '-'}
-</td>
+          ${p.netProfit !== undefined ? Number(p.netProfit).toFixed(2) : '-'}
+        </td>
+
         <td><span class="tag buy">ACTIVE</span></td>
+
         <td>
           <button class="btn close" onclick="closeOne('${p.positionId}', '${p.volume}')">Close</button>
         </td>
