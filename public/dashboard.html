@@ -172,33 +172,13 @@ ws.onmessage = (event) => {
   const data = JSON.parse(event.data);
 
   if (data.type === 'dashboard_update') {
-
-    // تحديث الربح
     document.getElementById("dailyPnl").innerText =
-      "$ " + Number(data.floatingPnL).toFixed(2);
-   
+      "$ " + Number(data.floatingPnL || 0).toFixed(2);
 
-    // تحديث الصفقات
-    let html = "";
-
-    data.positions.forEach(p => {
-      html += `
-        <tr>
-          <td>${p.positionId}</td>
-          <td>${p.symbol}</td>
-          <td>-</td>
-          <td>-</td>
-          <td>-</td>
-          <td class="${Number(p.netProfit) >= 0 ? 'green' : 'red'}">
-            ${Number(p.netProfit || 0).toFixed(2)}
-          </td>
-          <td>ACTIVE</td>
-          <td>-</td>
-        </tr>
-      `;
-    });
-
-    document.getElementById("positionsBody").innerHTML = html;
+    if (Array.isArray(data.positions) && data.positions.length > 0) {
+      renderPositions(data.positions);
+      document.getElementById("openCount").innerText = data.positions.length;
+    }
   }
 };
 
