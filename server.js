@@ -1368,6 +1368,26 @@ async function getOpenPositionsFromCTrader() {
   });
 }
 
+function shouldAddPosition(existingPositions) {
+  if (!existingPositions.length) return true;
+
+  const profit = existingPositions.reduce((sum, p) => sum + p.netProfit, 0);
+
+  return profit > 5; // مثلا 5$ ربح
+}
+
+function canOpenNewTrade(existingPositions) {
+  if (!existingPositions.length) return true;
+
+  const losing = existingPositions.find(p => p.netProfit < 0);
+
+  if (losing) {
+    console.log('❌ Blocked: losing position exists');
+    return false;
+  }
+
+  return true;
+}
 
 async function canOpenNewPosition(symbolId, newAction) {
   try {
