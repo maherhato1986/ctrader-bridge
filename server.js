@@ -1582,7 +1582,9 @@ app.get('/api/dashboard', auth, async (req, res) => {
         p.position?.moneyDigits ??
         2;
 
-      floatingPnL += Number(rawProfit) / Math.pow(10, Number(moneyDigits || 2));
+      const netProfit = Number(rawProfit) / Math.pow(10, Number(moneyDigits || 2));
+
+      floatingPnL += netProfit;
 
       return {
         positionId: info.positionId,
@@ -1598,6 +1600,7 @@ app.get('/api/dashboard', auth, async (req, res) => {
           p.entryPrice ||
           '-',
         entryPrice: info.entryPrice,
+        netProfit,
         status: 'ACTIVE'
       };
     });
