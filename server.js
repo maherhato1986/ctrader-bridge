@@ -200,6 +200,8 @@ const PT = {
 
   GET_ACCOUNTS_REQ: 2149,
   GET_ACCOUNTS_RES: 2150,
+  SUBSCRIBE_SPOTS_REQ: 2127,
+SPOT_EVENT: 2131,
 RECONCILE_REQ: Number(process.env.PT_RECONCILE_REQ || 2124),
 RECONCILE_RES: Number(process.env.PT_RECONCILE_RES || 2125),
    AMEND_POSITION_SLTP_REQ: Number(process.env.PT_AMEND_POSITION_SLTP_REQ || 2110),
@@ -1555,6 +1557,83 @@ async function executeOrder({ symbolId, side, volume }) {
   });
 }
 
+
+async function getLiveSpotPriceFromCTrader(symbolId) {
+  requireCTraderEnv();
+
+  return new Promise((resolve, reject) => {
+    const ws = new WebSocket(CTRADER_WS_URL);
+    let settled = false;
+
+    const timeout = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      try { ws.close(); } catch {}
+      reject(new Error('Live price timeout'));
+    }, 15000);
+
+    function finish(price) {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      try { ws.close(); } catch {}
+      resolve(price);
+    }
+
+    ws.on('open', () => {
+      ws.send(JSON.stringify({
+        clientMsgId: `spot-app-auth-${Date.now()}`,
+        payloadType: PT.APP_AUTH_REQ,
+        payload: {
+          clientId: CTRADER_CLIENT_ID,
+          clientSecret: CTRADER_CLIENT_SECRET
+        }
+      }));
+    });
+
+    ws.on('message', raw => {
+      const msg = JSON.parse(raw.toString());
+
+      if (msg.payloadType === PT.APP_AUTH_RES) {
+        ws.send(JSON.stringify({
+          clientMsgId: `spot-account-auth-${Date.now()}`,
+          payloadType: PT.ACCOUNT_AUTH_REQ,
+          payload: {
+            ctidTraderAccountId: CTRADER_ACCOUNT_ID,
+            accessToken: CTRADER_ACCESS_TOKEN
+          }
+        }));
+        return;
+      }
+
+      if (msg.payloadType === PT.ACCOUNT_AUTH_RES) {
+        ws.send(JSON.stringify({
+          clientMsgId: `subscribe-spot-${Date.now()}`,
+          payloadType: PT.SUBSCRIBE_SPOTS_REQ,
+          payload: {
+            ctidTraderAccountId: CTRADER_ACCOUNT_ID,
+            symbolId: [Number(symbolId)]
+          }
+        }));
+        return;
+      }
+
+      const payload = msg.payload || {};
+      const bidRaw = payload.bid ?? payload.spotEvent?.bid;
+      const askRaw = payload.ask ?? payload.spotEvent?.ask;
+
+      if (bidRaw && askRaw) {
+        const digits = Number(process.env.CTRADER_PRICE_DIGITS || 2);
+        const bid = Number(bidRaw) / Math.pow(10, digits);
+        const ask = Number(askRaw) / Math.pow(10, digits);
+        finish((bid + ask) / 2);
+      }
+    });
+
+    ws.on('error', reject);
+  });
+}
+
 /* =========================
    ROUTES
 ========================= */
@@ -1567,7 +1646,7 @@ app.get('/api/dashboard', auth, async (req, res) => {
 
     let floatingPnL = 0;
 
-    const formattedPositions = positions.map(p => {
+    const formattedPositions = await Promise.all(positions.map(async p => {
       const info = extractPositionInfo(p);
 
       const currentPrice = Number(
@@ -1611,7 +1690,7 @@ const grossProfit =
         netProfit,
         status: 'ACTIVE'
       };
-    });
+   }));
 
     res.json({
       ok: true,
