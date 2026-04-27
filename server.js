@@ -1865,6 +1865,15 @@ floatingPnL += netProfit;
     status: 'ACTIVE'
   };
 });
+    dashboardClients.forEach(client => {
+  if (client.readyState === WebSocket.OPEN) {
+    client.send(JSON.stringify({
+      type: 'dashboard_update',
+      floatingPnL,
+      positions: formattedPositions
+    }));
+  }
+});
 
     res.json({
       ok: true,
