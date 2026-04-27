@@ -719,12 +719,7 @@ async function applyTrailingStop(symbolId, targetPositions = [], trades = []) {
         0
       );
 
-      const currentPrice = Number(
-        p.price ||
-p.tradeData?.price ||
-p.position?.price ||
-0
-      );
+     const currentPrice = await getLiveSpotPriceFromCTrader(info.symbolId);
 
       const currentSL = Number(
         p.stopLoss ||
@@ -1688,13 +1683,9 @@ app.get('/api/dashboard', auth, async (req, res) => {
       const volumeUnits = Number(info.volume || 0);
       const sideNum = Number(info.side);
 
-      const contractSize = 100; // الذهب = 100 oz لكل لوت
-
-const lots = volumeUnits / 10000; // 1000 = 0.10 lot
-
-const contractSize = 100;
+ const contractSize = 100;
 const lots = volumeUnits / 10000;
-
+      
 const grossProfit =
   sideNum === 2
     ? (entryPrice - currentPrice) * contractSize * lots
@@ -2310,6 +2301,57 @@ if (!positionDecision.allowed) {
     });
   }
 }
+
+    // =========================
+// 🧠 SMART ENGINE START
+// =========================
+
+const positions = await getOpenPositionsFromCTrader();
+
+// 1. منع الدخول إذا فيه خسارة
+const hasLosing = positions.some(p => {
+  const raw =
+    p.netProfit ??
+    p.unrealizedNetProfit ??
+    p.position?.netProfit ??
+    0;
+
+  return Number(raw) < 0;
+});
+
+if (hasLosing) {
+  return res.status(409).json({
+    ok: false,
+    message: '❌ Blocked: losing position exists'
+  });
+}
+
+// 2. منع التعزيز إذا الربح ضعيف
+const totalProfit = positions.reduce((sum, p) => {
+  const raw =
+    p.netProfit ??
+    p.unrealizedNetProfit ??
+    p.position?.netProfit ??
+    0;
+
+  const digits =
+    p.moneyDigits ??
+    p.position?.moneyDigits ??
+    2;
+
+  return sum + (Number(raw) / Math.pow(10, digits));
+}, 0);
+
+if (positions.length > 0 && totalProfit < 5) {
+  return res.status(409).json({
+    ok: false,
+    message: '⛔ Blocked: profit too small to pyramid'
+  });
+}
+
+// =========================
+// 🧠 SMART ENGINE END
+// =========================
 
     console.log('🚀 EXECUTING REAL TRADE...');
     console.log({
