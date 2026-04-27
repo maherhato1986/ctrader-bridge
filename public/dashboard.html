@@ -165,6 +165,42 @@ th{color:#9fb2c8;font-weight:700}
 <script>
 const API_KEY = "maher123";
 
+  // 🔥 WebSocket connection (حطها هنا مباشرة)
+const ws = new WebSocket("ws://67.205.174.166:3000");
+
+ws.onmessage = (event) => {
+  const data = JSON.parse(event.data);
+
+  if (data.type === 'dashboard_update') {
+
+    // تحديث الربح
+    document.getElementById("dailyPnl").innerText =
+      "$ " + Number(data.floatingPnL).toFixed(2);
+
+    // تحديث الصفقات
+    let html = "";
+
+    data.positions.forEach(p => {
+      html += `
+        <tr>
+          <td>${p.positionId}</td>
+          <td>${p.symbol}</td>
+          <td>-</td>
+          <td>-</td>
+          <td>-</td>
+          <td class="${p.profit >= 0 ? 'green' : 'red'}">
+            ${p.profit}
+          </td>
+          <td>ACTIVE</td>
+          <td>-</td>
+        </tr>
+      `;
+    });
+
+    document.getElementById("positionsBody").innerHTML = html;
+  }
+};
+
 function addLog(text, type="green"){
   const logs = document.getElementById("logs");
   const time = new Date().toLocaleTimeString();
@@ -345,7 +381,7 @@ async function killAll(){
 }
 loadTradingViewChart();
 loadData();
-setInterval(loadData, 7000);
+
 </script>
 </body>
 </html>
