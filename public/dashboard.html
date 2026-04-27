@@ -175,7 +175,7 @@ ws.onmessage = (event) => {
     document.getElementById("dailyPnl").innerText =
       "$ " + Number(data.floatingPnL || 0).toFixed(2);
 
-    if (Array.isArray(data.positions) && data.positions.length > 0) {
+   if (Array.isArray(data.positions)) {
       renderPositions(data.positions);
       document.getElementById("openCount").innerText = data.positions.length;
     }
