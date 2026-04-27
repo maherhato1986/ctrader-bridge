@@ -1837,19 +1837,21 @@ try {
   // حجم العقد للذهب
   const contractSize = 100;
 
-  let netProfit = 0;
+ const rawProfit =
+  p.netProfit ??
+  p.unrealizedNetProfit ??
+  p.position?.netProfit ??
+  p.position?.unrealizedNetProfit ??
+  0;
 
-  if (entryPrice && currentPrice && lots) {
-    if (sideNum === 2) {
-      // SELL
-      netProfit = (entryPrice - currentPrice) * contractSize * lots;
-    } else {
-      // BUY
-      netProfit = (currentPrice - entryPrice) * contractSize * lots;
-    }
-  }
+const moneyDigits =
+  p.moneyDigits ??
+  p.position?.moneyDigits ??
+  2;
 
-  floatingPnL += netProfit;
+const netProfit = Number(rawProfit) / Math.pow(10, moneyDigits);
+
+floatingPnL += netProfit;
 
   return {
     positionId: info.positionId,
