@@ -27,6 +27,22 @@ const { Resend } = require('resend');
 // =========================
 const app = express();
 
+const server = require('http').createServer(app);
+const wss = new WebSocket.Server({ server });
+
+let dashboardClients = [];
+
+wss.on('connection', (ws) => {
+  console.log('🟢 Dashboard connected');
+
+  dashboardClients.push(ws);
+
+  ws.on('close', () => {
+    console.log('🔴 Dashboard disconnected');
+    dashboardClients = dashboardClients.filter(c => c !== ws);
+  });
+});
+
 app.get('/test', (req, res) => {
   console.log('🔥 TEST ROUTE HIT');
   res.send('SERVER WORKING');
@@ -3411,15 +3427,62 @@ function connectToCTrader() {
 
 startLivePriceStream();
 
+setInterval(async () => {
+  try {
+    const positions = await getOpenPositionsFromCTrader();
 
+    let floatingPnL = 0;
+
+    const formatted = positions.map(p => {
+      const info = extractPositionInfo(p);
+
+      const currentPrice = livePrices[info.symbolId] || 0;
+      const entryPrice = Number(info.entryPrice || 0);
+
+      const lots = info.volume / 100000;
+      const contractSize = 100;
+
+      let profit = 0;
+
+      if (entryPrice && currentPrice && lots) {
+        if (String(info.side).toUpperCase().includes('SELL')) {
+          profit = (entryPrice - currentPrice) * contractSize * lots;
+        } else {
+          profit = (currentPrice - entryPrice) * contractSize * lots;
+        }
+      }
+
+      floatingPnL += profit;
+
+      return {
+        positionId: info.positionId,
+        symbol: 'XAUUSD',
+        profit: Number(profit.toFixed(2))
+      };
+    });
+
+    const payload = {
+      type: 'dashboard_update',
+      positions: formatted,
+      floatingPnL
+    };
+
+    dashboardClients.forEach(ws => {
+      if (ws.readyState === 1) {
+        ws.send(JSON.stringify(payload));
+      }
+    });
+
+  } catch (err) {
+    console.log('WS BROADCAST ERROR:', err.message);
+  }
+}, 1000);
 
 /* =========================
    START
 ========================= */
 
 
-
-app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
-  console.log(`MODE: ${MODE}`);
+server.listen(PORT, () => {
+  console.log(`🚀 Server running on ${PORT}`);
 });
