@@ -335,23 +335,32 @@ async function sendSignalToTelegram(signal) {
 
 
 async function sendTradeAlertToTelegram(title, data = {}) {
-  if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID) return;
+  if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID) {
+    console.log('⚠️ Trade alert skipped: missing TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID');
+    return;
+  }
 
-  const text = `
-${title}
+  try {
+    const text = `${title}
 
-Symbol: ${data.symbol || '-'}
-Action: ${data.action || '-'}
-Volume: ${data.volume || '-'}
-Position ID: ${data.positionId || '-'}
-Status: ${data.status || '-'}
-Time: ${new Date().toISOString()}
-`;
+📊 Symbol: ${data.symbol || '-'}
+📈 Action: ${data.action || '-'}
+💰 Volume: ${data.volume || '-'}
+🆔 Position ID: ${data.positionId || '-'}
+💵 Price: ${data.price || '-'}
+📌 Status: ${data.status || '-'}
+⏱ Time: ${new Date().toLocaleString()}`;
 
-  await telegramApi('sendMessage', {
-    chat_id: TELEGRAM_CHAT_ID,
-    text
-  });
+    await telegramApi('sendMessage', {
+      chat_id: TELEGRAM_CHAT_ID,
+      text
+    });
+
+    console.log(`📨 Trade alert sent: ${title}`);
+
+  } catch (err) {
+    console.log('❌ Telegram trade alert failed:', err.response?.data || err.message);
+  }
 }
 /* =========================
    SIGNAL BUILDER
@@ -2385,45 +2394,58 @@ app.post('/close-position', auth, async (req, res) => {
 
     let finalVolume = Number(volume || 0);
 
+    const positions = await getOpenPositionsFromCTrader();
+
+    const found = positions
+      .map(extractPositionInfo)
+      .find(p => Number(p.positionId) === Number(positionId));
+
+    if (!found) {
+      return res.status(404).json({
+        ok: false,
+        message: 'Position not found'
+      });
+    }
+
     if (!finalVolume) {
-      const positions = await getOpenPositionsFromCTrader();
-      const found = positions.map(extractPositionInfo)
-        .find(p => Number(p.positionId) === Number(positionId));
-
-      if (!found) {
-        return res.status(404).json({
-          ok: false,
-          message: 'Position not found'
-        });
-      }
-
       finalVolume = found.volume;
     }
 
     console.log('🛑 CLOSE POSITION REQUEST:', {
       positionId,
+      symbolId: found.symbolId,
       volume: finalVolume
     });
 
     const result = await closePosition(positionId, finalVolume);
 
     await sendTradeAlertToTelegram('🛑 POSITION CLOSED', {
-  symbol: found?.symbol || 'UNKNOWN',
-  action: 'CLOSE',
-  volume: finalVolume,
-  positionId,
-  status: 'CLOSED'
-});
+      symbol: Number(found.symbolId) === 41 ? 'XAUUSD' : String(found.symbolId || 'UNKNOWN'),
+      action: 'CLOSE',
+      volume: finalVolume,
+      positionId,
+      price: found.entryPrice || '-',
+      status: 'CLOSED'
+    });
+
+    logAuditEvent(req, 'Closed Position From Dashboard', {
+      positionId,
+      symbolId: found.symbolId,
+      volume: finalVolume
+    });
 
     return res.json({
       ok: !isMarketClosedError(result),
       positionId: Number(positionId),
+      symbolId: found.symbolId,
       volume: finalVolume,
       marketClosed: isMarketClosedError(result),
       result
     });
 
   } catch (err) {
+    console.error('❌ CLOSE POSITION ERROR:', err);
+
     return res.status(500).json({
       ok: false,
       message: err.message
