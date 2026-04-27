@@ -249,17 +249,6 @@ function extractPositionInfo(p) {
 
 
 
-function auth(req, res, next) {
-  if (req.headers['x-api-key'] !== API_KEY) {
-    return res.status(401).json({ ok: false, message: 'Unauthorized' });
-  }
-  next();
-}
-
-function now() {
-  return new Date().toISOString();
-}
-
 /* =========================
    STORAGE (بسيط)
 ========================= */
