@@ -236,7 +236,11 @@ function renderPositions(positions){
       <tr>
         <td>${p.positionId || "-"}</td>
         <td>${symbolName}</td>
-        <td><span class="tag ${Number(p.side) === 2 ? 'sell' : 'buy'}">${sideText}</span></td>
+        <td>
+  <span class="tag ${Number(p.side) === 2 ? 'sell' : 'buy'}">
+    ${Number(p.side) === 2 ? 'SELL' : 'BUY'}
+  </span>
+</td>
         <td>${p.volume || "-"}</td>
         <td>${p.price || p.entryPrice || "-"}</td>
         <td><span class="tag buy">ACTIVE</span></td>
