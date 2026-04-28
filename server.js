@@ -1871,14 +1871,38 @@ const formattedPositions = await Promise.all(positions.map(async p => {
   const volumeUnits = Number(info.volume || 0);
   const lots = volumeUnits / 10000; // لأن عندك 100 = 0.01 و 1000 = 0.10
 
-  const entryPrice = Number(info.entryPrice || p.price || 0);
+const formattedPositions = await Promise.all(positions.map(async p => {
+  const info = extractPositionInfo(p);
+
+  const moneyDigits = Number(info.moneyDigits || p.moneyDigits || 2);
+
+  const volumeUnits = Number(
+    info.volume ||
+    p.tradeData?.volume ||
+    p.position?.volume ||
+    p.volume ||
+    0
+  );
+
+  const lots = volumeUnits / 10000; // عندك: 100 = 0.01 و 1000 = 0.10
+
+  const entryPrice = Number(
+    info.entryPrice ||
+    p.tradeData?.entryPrice ||
+    p.tradeData?.openPrice ||
+    p.position?.entryPrice ||
+    p.price ||
+    0
+  );
 
   let currentPrice = 0;
 
   try {
-    currentPrice = await getLiveSpotPriceFromCTrader(info.symbolId);
+    currentPrice = await getLiveSpotPriceFromCTrader(info.symbolId || p.tradeData?.symbolId || 41);
   } catch (err) {
     currentPrice = Number(
+      livePrices[info.symbolId] ||
+      livePrices[41] ||
       p.currentPrice ||
       p.price ||
       p.tradeData?.price ||
@@ -1889,7 +1913,9 @@ const formattedPositions = await Promise.all(positions.map(async p => {
   }
 
   const tradeSide =
-    String(info.side).toUpperCase().includes('SELL') || Number(info.side) === 2
+    String(info.side).toUpperCase().includes('SELL') ||
+    String(p.tradeData?.tradeSide).toUpperCase().includes('SELL') ||
+    Number(info.side || p.tradeData?.tradeSide) === 2
       ? 2
       : 1;
 
@@ -1910,10 +1936,17 @@ const formattedPositions = await Promise.all(positions.map(async p => {
 
   floatingPnL += netProfit;
 
+  const symbolId = Number(
+    info.symbolId ||
+    p.tradeData?.symbolId ||
+    p.position?.symbolId ||
+    41
+  );
+
   return {
-    positionId: info.positionId,
-    symbolId: info.symbolId,
-    symbol: Number(info.symbolId) === 41 ? 'XAUUSD' : String(info.symbolId || '-'),
+    positionId: info.positionId || p.positionId,
+    symbolId,
+    symbol: symbolId === 41 ? 'XAUUSD' : String(symbolId || '-'),
 
     volume: volumeUnits,
     lots: Number(lots.toFixed(2)),
