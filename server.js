@@ -261,28 +261,52 @@ function isMarketClosedError(msg) {
 }
 
 function extractPositionInfo(p) {
-  const tradeData = p.tradeData || {};
-
   return {
     positionId: Number(p.positionId || 0),
 
-    symbolId: Number(tradeData.symbolId || 0),
+    symbolId: Number(
+      p.symbolId ||
+      p.tradeData?.symbolId ||
+      p.position?.symbolId ||
+      0
+    ),
 
-    volume: Number(tradeData.volume || 0),
+    volume: Number(
+      p.volume ||
+      p.tradeData?.volume ||
+      p.position?.volume ||
+      0
+    ),
 
-    side: Number(tradeData.tradeSide || 0),
+    side:
+      p.tradeSide ||
+      p.tradeData?.tradeSide ||
+      p.position?.tradeSide ||
+      0,
 
-    entryPrice: Number(tradeData.openPrice || 0),
+    entryPrice: Number(
+      p.entryPrice ||
+      p.tradeData?.entryPrice ||
+      p.tradeData?.openPrice ||
+      p.position?.entryPrice ||
+      0
+    ),
 
-    currentPrice: Number(p.price || 0),
+    currentPrice: Number(
+      p.price ||
+      p.tradeData?.price ||
+      p.position?.price ||
+      0
+    ),
 
     swap: Number(p.swap || 0),
-
     commission: Number(p.commission || 0),
 
-    moneyDigits: Number(p.moneyDigits || 2),
-
-    raw: p
+    moneyDigits: Number(
+      p.moneyDigits ||
+      p.position?.moneyDigits ||
+      2
+    )
   };
 }
 /* =========================
@@ -1855,7 +1879,13 @@ try {
 const tradeSide =
   String(info.side).toUpperCase().includes('SELL') ? 2 :
   String(info.side).toUpperCase().includes('BUY') ? 1 : 0;
-const actualPrice = Number(info.currentPrice || currentPrice || 0);
+const actualPrice = Number(
+  p.price ||
+  p.tradeData?.price ||
+  info.currentPrice ||
+  currentPrice ||
+  0
+);
 const moneyDigits = Number(info.moneyDigits || 2);
 
 let grossProfit = 0;
