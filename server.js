@@ -1950,7 +1950,7 @@ app.get('/api/dashboard', auth, async (req, res) => {
         price: entryPrice,
         entryPrice,
         currentPrice,
-        netProfit: Number(netProfit.toFixed(2)),
+        netProfit: Number(netProfit.toFixed(4)),
         status: 'ACTIVE'
       };
     }));
