@@ -1906,16 +1906,23 @@ const netProfit = grossProfit + swap + commission;
 floatingPnL += netProfit;
 
   return {
-    positionId: info.positionId,
-    symbolId: info.symbolId,
-    symbol: Number(info.symbolId) === 41 ? 'XAUUSD' : String(info.symbolId || '-'),
-    volume: info.volume,
-    side: info.side,
-    price: currentPrice,
-    entryPrice,
-    netProfit: Number(netProfit.toFixed(2)),
-    status: 'ACTIVE'
-  };
+  positionId: info.positionId,
+  symbolId: info.symbolId,
+  symbol: Number(info.symbolId) === 41 ? 'XAUUSD' : String(info.symbolId || '-'),
+
+  volume: info.volume,
+
+  side: info.side,
+
+  // ✅ هذا أهم تعديل
+  price: entryPrice,        // 👈 بدل currentPrice
+  currentPrice: currentPrice, // 👈 أضف هذا
+
+  entryPrice,
+
+  netProfit: Number(netProfit.toFixed(2)),
+  status: 'ACTIVE'
+};
 }));
     dashboardClients.forEach(client => {
   if (client.readyState === WebSocket.OPEN) {
