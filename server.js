@@ -1836,6 +1836,21 @@ async function getLiveSpotPriceFromCTrader(symbolId) {
   });
 }
 
+function normalizeMoney(value, digits = 2) {
+  const n = Number(value || 0);
+  const d = Number(digits || 2);
+
+  if (!Number.isFinite(n)) return 0;
+
+  // cTrader غالباً يرجع المال مضروب حسب moneyDigits
+  if (Math.abs(n) > 100000) {
+    return n / Math.pow(10, d);
+  }
+
+  return n;
+}
+
+
 /* =========================
    ROUTES
 ========================= */
@@ -1851,78 +1866,67 @@ app.get('/api/dashboard', auth, async (req, res) => {
 const formattedPositions = await Promise.all(positions.map(async p => {
   const info = extractPositionInfo(p);
 
+  const moneyDigits = Number(info.moneyDigits || p.moneyDigits || 2);
+
+  const volumeUnits = Number(info.volume || 0);
+  const lots = volumeUnits / 10000; // لأن عندك 100 = 0.01 و 1000 = 0.10
+
+  const entryPrice = Number(info.entryPrice || p.price || 0);
+
   let currentPrice = 0;
 
-try {
-  currentPrice = await getLiveSpotPriceFromCTrader(info.symbolId);
-} catch (err) {
-  console.log('⚠️ Live price fallback');
+  try {
+    currentPrice = await getLiveSpotPriceFromCTrader(info.symbolId);
+  } catch (err) {
+    currentPrice = Number(
+      p.currentPrice ||
+      p.price ||
+      p.tradeData?.price ||
+      p.position?.price ||
+      entryPrice ||
+      0
+    );
+  }
 
-  currentPrice = Number(
-    p.price ||
-    p.tradeData?.price ||
-    p.position?.price ||
-    0
-  );
-}
+  const tradeSide =
+    String(info.side).toUpperCase().includes('SELL') || Number(info.side) === 2
+      ? 2
+      : 1;
 
-  const entryPrice = Number(info.entryPrice || 0);
-  const volumeUnits = Number(info.volume || 0);
-  const sideNum = Number(info.side);
-
-  // تحويل الحجم (ctrader units → lots)
-  const lots = volumeUnits / 100000;
-
-  // حجم العقد للذهب
   const contractSize = 100;
 
-const tradeSide =
-  String(info.side).toUpperCase().includes('SELL') ? 2 :
-  String(info.side).toUpperCase().includes('BUY') ? 1 : 0;
-const actualPrice = Number(
-  p.price ||
-  p.tradeData?.price ||
-  info.currentPrice ||
-  currentPrice ||
-  0
-);
-const moneyDigits = Number(info.moneyDigits || 2);
+  let calculatedProfit = 0;
 
-let grossProfit = 0;
-
-if (entryPrice && actualPrice && lots) {
-  if (tradeSide === 1) {
-    grossProfit = (actualPrice - entryPrice) * contractSize * lots;
-  } else if (tradeSide === 2) {
-    grossProfit = (entryPrice - actualPrice) * contractSize * lots;
+  if (entryPrice && currentPrice && lots) {
+    calculatedProfit = tradeSide === 1
+      ? (currentPrice - entryPrice) * contractSize * lots
+      : (entryPrice - currentPrice) * contractSize * lots;
   }
-}
 
-const swap = Number(info.swap || 0) / Math.pow(10, moneyDigits);
-const commission = Number(info.commission || 0) / Math.pow(10, moneyDigits);
+  const swap = normalizeMoney(info.swap || p.swap, moneyDigits);
+  const commission = normalizeMoney(info.commission || p.commission, moneyDigits);
 
-const netProfit = grossProfit + swap + commission;
+  const netProfit = calculatedProfit + swap + commission;
 
-floatingPnL += netProfit;
+  floatingPnL += netProfit;
 
   return {
-  positionId: info.positionId,
-  symbolId: info.symbolId,
-  symbol: Number(info.symbolId) === 41 ? 'XAUUSD' : String(info.symbolId || '-'),
+    positionId: info.positionId,
+    symbolId: info.symbolId,
+    symbol: Number(info.symbolId) === 41 ? 'XAUUSD' : String(info.symbolId || '-'),
 
-  volume: info.volume,
+    volume: volumeUnits,
+    lots: Number(lots.toFixed(2)),
 
-  side: info.side,
+    side: tradeSide === 2 ? 'SELL' : 'BUY',
 
-  // ✅ هذا أهم تعديل
-  price: entryPrice,        // 👈 بدل currentPrice
-  currentPrice: currentPrice, // 👈 أضف هذا
+    price: entryPrice,
+    entryPrice,
+    currentPrice,
 
-  entryPrice,
-
-  netProfit: Number(netProfit.toFixed(2)),
-  status: 'ACTIVE'
-};
+    netProfit: Number(netProfit.toFixed(2)),
+    status: 'ACTIVE'
+  };
 }));
     dashboardClients.forEach(client => {
   if (client.readyState === WebSocket.OPEN) {
@@ -1938,8 +1942,10 @@ floatingPnL += netProfit;
       ok: true,
       mode: MODE,
       serverTime: new Date().toISOString(),
-      equity: account.equity,
-      balance: account.balance,
+      balance: Number(account.balance || 0),
+equity: Number(account.equity || (Number(account.balance || 0) + floatingPnL)),
+freeMargin: Number(account.freeMargin || account.marginFree || 0),
+usedMargin: Number(account.usedMargin || account.margin || 0),
       positions: formattedPositions,
       pending,
       floatingPnL
