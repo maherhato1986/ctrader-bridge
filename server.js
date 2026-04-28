@@ -776,11 +776,13 @@ async function applyBreakEvenLogic(symbolId, targetPositions = [], trades = []) 
       const atr = Number(trade.atr || 0.5);
 
       const entryPrice = Number(
-        p.entryPrice ||
-        p.tradeData?.entryPrice ||
-        p.position?.entryPrice ||
-        0
-      );
+  p.price ||
+  info.entryPrice ||
+  p.tradeData?.entryPrice ||
+  p.tradeData?.openPrice ||
+  p.position?.entryPrice ||
+  0
+);
 
     let currentPrice = 0;
 
@@ -789,12 +791,16 @@ try {
 } catch (err) {
   console.log('⚠️ Live price failed, fallback used');
 
-  currentPrice = Number(
-    p.price ||
-    p.tradeData?.price ||
-    p.position?.price ||
-    0
-  );
+ currentPrice = Number(
+  livePrices[symbolId] ||
+  livePrices[41] ||
+  p.currentPrice ||
+  p.tradeData?.price ||
+  p.position?.price ||
+  p.price ||
+  entryPrice ||
+  0
+);
 }
 
       if (!entryPrice || !currentPrice) continue;
