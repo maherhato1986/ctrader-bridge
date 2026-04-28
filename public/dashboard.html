@@ -253,9 +253,9 @@ function renderPositions(positions){
       p.position?.volume ??
       0;
 
-    const lots = Number(rawVolume) > 100
-      ? (Number(rawVolume) / 100000).toFixed(2) + " Lots"
-      : Number(rawVolume).toFixed(2) + " Lots";
+    const lots = p.lots !== undefined
+  ? Number(p.lots).toFixed(2) + " Lots"
+  : Number(rawVolume / 10000).toFixed(2) + " Lots";
 
     const entryPrice =
       p.entryPrice ??
