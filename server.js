@@ -1869,122 +1869,110 @@ app.get('/api/dashboard', auth, async (req, res) => {
 
     let floatingPnL = 0;
 
-const formattedPositions = await Promise.all(positions.map(async p => {
-  const info = extractPositionInfo(p);
+    const formattedPositions = await Promise.all(positions.map(async p => {
+      const info = extractPositionInfo(p);
 
-  const moneyDigits = Number(info.moneyDigits || p.moneyDigits || 2);
+      const moneyDigits = Number(info.moneyDigits || p.moneyDigits || 2);
 
-  const volumeUnits = Number(info.volume || 0);
-  const lots = volumeUnits / 10000; // لأن عندك 100 = 0.01 و 1000 = 0.10
+      const volumeUnits = Number(
+        info.volume ||
+        p.tradeData?.volume ||
+        p.position?.volume ||
+        p.volume ||
+        0
+      );
 
-const formattedPositions = await Promise.all(positions.map(async p => {
-  const info = extractPositionInfo(p);
+      const lots = volumeUnits / 10000;
 
-  const moneyDigits = Number(info.moneyDigits || p.moneyDigits || 2);
+      const entryPrice = Number(
+        p.price ||
+        info.entryPrice ||
+        p.tradeData?.entryPrice ||
+        p.tradeData?.openPrice ||
+        p.position?.entryPrice ||
+        0
+      );
 
-  const volumeUnits = Number(
-    info.volume ||
-    p.tradeData?.volume ||
-    p.position?.volume ||
-    p.volume ||
-    0
-  );
+      const symbolId = Number(
+        info.symbolId ||
+        p.tradeData?.symbolId ||
+        p.position?.symbolId ||
+        41
+      );
 
-  const lots = volumeUnits / 10000; // عندك: 100 = 0.01 و 1000 = 0.10
+      let currentPrice = 0;
 
-  const entryPrice = Number(
-    info.entryPrice ||
-    p.tradeData?.entryPrice ||
-    p.tradeData?.openPrice ||
-    p.position?.entryPrice ||
-    p.price ||
-    0
-  );
+      try {
+        currentPrice = await getLiveSpotPriceFromCTrader(symbolId);
+      } catch (err) {
+        currentPrice = Number(
+          livePrices[symbolId] ||
+          livePrices[41] ||
+          p.currentPrice ||
+          p.tradeData?.price ||
+          p.position?.price ||
+          p.price ||
+          entryPrice ||
+          0
+        );
+      }
 
-  let currentPrice = 0;
+      const tradeSide =
+        String(info.side).toUpperCase().includes('SELL') ||
+        String(p.tradeData?.tradeSide).toUpperCase().includes('SELL') ||
+        Number(info.side || p.tradeData?.tradeSide) === 2
+          ? 2
+          : 1;
 
-  try {
-    currentPrice = await getLiveSpotPriceFromCTrader(info.symbolId || p.tradeData?.symbolId || 41);
-  } catch (err) {
-    currentPrice = Number(
-      livePrices[info.symbolId] ||
-      livePrices[41] ||
-      p.currentPrice ||
-      p.price ||
-      p.tradeData?.price ||
-      p.position?.price ||
-      entryPrice ||
-      0
-    );
-  }
+      const contractSize = 100;
 
-  const tradeSide =
-    String(info.side).toUpperCase().includes('SELL') ||
-    String(p.tradeData?.tradeSide).toUpperCase().includes('SELL') ||
-    Number(info.side || p.tradeData?.tradeSide) === 2
-      ? 2
-      : 1;
+      let calculatedProfit = 0;
 
-  const contractSize = 100;
+      if (entryPrice && currentPrice && lots) {
+        calculatedProfit = tradeSide === 1
+          ? (currentPrice - entryPrice) * contractSize * lots
+          : (entryPrice - currentPrice) * contractSize * lots;
+      }
 
-  let calculatedProfit = 0;
+      const swap = normalizeMoney(info.swap || p.swap, moneyDigits);
+      const commission = normalizeMoney(info.commission || p.commission, moneyDigits);
 
-  if (entryPrice && currentPrice && lots) {
-    calculatedProfit = tradeSide === 1
-      ? (currentPrice - entryPrice) * contractSize * lots
-      : (entryPrice - currentPrice) * contractSize * lots;
-  }
+      const netProfit = calculatedProfit + swap + commission;
+      floatingPnL += netProfit;
 
-  const swap = normalizeMoney(info.swap || p.swap, moneyDigits);
-  const commission = normalizeMoney(info.commission || p.commission, moneyDigits);
-
-  const netProfit = calculatedProfit + swap + commission;
-
-  floatingPnL += netProfit;
-
-  const symbolId = Number(
-    info.symbolId ||
-    p.tradeData?.symbolId ||
-    p.position?.symbolId ||
-    41
-  );
-
-  return {
-    positionId: info.positionId || p.positionId,
-    symbolId,
-    symbol: symbolId === 41 ? 'XAUUSD' : String(symbolId || '-'),
-
-    volume: volumeUnits,
-    lots: Number(lots.toFixed(2)),
-
-    side: tradeSide === 2 ? 'SELL' : 'BUY',
-
-    price: entryPrice,
-    entryPrice,
-    currentPrice,
-
-    netProfit: Number(netProfit.toFixed(2)),
-    status: 'ACTIVE'
-  };
-}));
-    dashboardClients.forEach(client => {
-  if (client.readyState === WebSocket.OPEN) {
-    client.send(JSON.stringify({
-      type: 'dashboard_update',
-      floatingPnL,
-      positions: formattedPositions.filter(p => p && p.positionId)
+      return {
+        positionId: info.positionId || p.positionId,
+        symbolId,
+        symbol: symbolId === 41 ? 'XAUUSD' : String(symbolId || '-'),
+        volume: volumeUnits,
+        lots: Number(lots.toFixed(2)),
+        side: tradeSide === 2 ? 'SELL' : 'BUY',
+        price: entryPrice,
+        entryPrice,
+        currentPrice,
+        netProfit: Number(netProfit.toFixed(2)),
+        status: 'ACTIVE'
+      };
     }));
-  }
-});
+
+    dashboardClients.forEach(client => {
+      if (client.readyState === WebSocket.OPEN) {
+        client.send(JSON.stringify({
+          type: 'dashboard_update',
+          floatingPnL,
+          positions: formattedPositions.filter(p => p && p.positionId)
+        }));
+      }
+    });
 
     res.json({
       ok: true,
       mode: MODE,
       serverTime: new Date().toISOString(),
       balance: Number(account.balance || 0),
-equity: Number(account.equity || (Number(account.balance || 0) + floatingPnL)),
-freeMargin: Number(account.freeMargin || account.marginFree || 0),
-usedMargin: Number(account.usedMargin || account.margin || 0),
+      equity: Number(account.equity || (Number(account.balance || 0) + floatingPnL)),
+      freeMargin: Number(account.freeMargin || account.marginFree || 0),
+      usedMargin: Number(account.usedMargin || account.margin || 0),
       positions: formattedPositions,
       pending,
       floatingPnL
