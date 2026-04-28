@@ -241,44 +241,66 @@ addLog("Dashboard synced successfully", "green");
 function renderPositions(positions){
   const body = document.getElementById("positionsBody");
 
-  if(!positions.length){
+  if(!Array.isArray(positions) || !positions.length){
     body.innerHTML = `<tr><td colspan="8">No open positions</td></tr>`;
     return;
   }
 
   body.innerHTML = positions.map(p => {
-    const symbolName = p.symbol || (Number(p.symbolId) === 41 ? "XAUUSD" : p.symbolId || "-");
+    const rawVolume =
+      p.volume ??
+      p.tradeData?.volume ??
+      p.position?.volume ??
+      0;
+
+    const lots = Number(rawVolume) > 100
+      ? (Number(rawVolume) / 100000).toFixed(2) + " Lots"
+      : Number(rawVolume).toFixed(2) + " Lots";
+
+    const entryPrice =
+      p.entryPrice ??
+      p.price ??
+      p.tradeData?.openPrice ??
+      p.tradeData?.entryPrice ??
+      p.position?.entryPrice ??
+      "-";
+
+    const net =
+      p.netProfit ??
+      p.unrealizedNetProfit ??
+      p.moneyNetProfit ??
+      p.position?.netProfit ??
+      null;
+
+    const netValue = net !== null && net !== undefined
+      ? Number(net).toFixed(2)
+      : "-";
+
+    const symbolName =
+      p.symbol ||
+      (Number(p.symbolId) === 41 ? "XAUUSD" : p.symbolId || "-");
+
+    const sideRaw =
+      p.side ??
+      p.tradeData?.tradeSide ??
+      p.position?.tradeSide ??
+      "";
 
     const sideText =
-      String(p.side).toUpperCase().includes("SELL") || Number(p.side) === 2
+      String(sideRaw).toUpperCase().includes("SELL") || Number(sideRaw) === 2
         ? "SELL"
-        : String(p.side).toUpperCase().includes("BUY") || Number(p.side) === 1
-          ? "BUY"
-          : "-";
+        : "BUY";
 
     return `
       <tr>
         <td>${p.positionId || "-"}</td>
         <td>${symbolName}</td>
-
-        <td>
-          <span class="tag ${sideText === 'SELL' ? 'sell' : sideText === 'BUY' ? 'buy' : ''}">
-            ${sideText}
-          </span>
-        </td>
-
-        <td>${p.volume || "-"}</td>
-        <td>${p.price || p.entryPrice || "-"}</td>
-
-        <td class="${Number(p.netProfit) >= 0 ? 'green' : 'red'}">
-          ${p.netProfit !== undefined ? Number(p.netProfit).toFixed(2) : '-'}
-        </td>
-
+        <td><span class="tag ${sideText === 'SELL' ? 'sell' : 'buy'}">${sideText}</span></td>
+        <td>${lots}</td>
+        <td>${entryPrice}</td>
+        <td class="${Number(netValue) >= 0 ? 'green' : 'red'}">${netValue}</td>
         <td><span class="tag buy">ACTIVE</span></td>
-
-        <td>
-          <button class="btn close" onclick="closeOne('${p.positionId}', '${p.volume}')">Close</button>
-        </td>
+        <td><button class="btn close" onclick="closeOne('${p.positionId}', '${rawVolume}')">Close</button></td>
       </tr>
     `;
   }).join("");
