@@ -13,18 +13,7 @@ const axios = require('axios');
 const path = require('path');
 const crypto = require('crypto');
 
-const TRADE_MANAGER = {
-  enabled: true,
-  requireSLTP: true,
 
-  minTakeProfitUsd: 10,
-  minStopLossUsd: 5,
-
-  breakEvenTriggerUsd: 8,
-  breakEvenBufferUsd: 1,
-
-  allowSecondTradeOnlyIfBE: true
-};
 
 function now() {
   return new Date().toISOString();
@@ -216,6 +205,18 @@ try {
 }
 
 let loginCodes = {};
+
+
+
+const TRADE_MANAGER = {
+  enabled: true,
+  requireSLTP: true,
+  minTakeProfitUsd: 10,
+  minStopLossUsd: 5,
+  breakEvenTriggerUsd: 8,
+  breakEvenBufferUsd: 1,
+  allowSecondTradeOnlyIfBE: true
+};
 
 
 
@@ -622,7 +623,28 @@ function calculateAutoVolume({ equity, riskPercent, stopLossUsd }) {
 
   return volumeUnits;
 }
+function validateTradeRisk(signal) {
+  const stopLossUsd = Number(signal.stopLossUsd || 0);
+  const takeProfitUsd = Number(signal.takeProfitUsd || 0);
 
+  if (TRADE_MANAGER.requireSLTP) {
+    if (stopLossUsd < TRADE_MANAGER.minStopLossUsd) {
+      return {
+        ok: false,
+        reason: `Stop Loss too small. Minimum is ${TRADE_MANAGER.minStopLossUsd} USD`
+      };
+    }
+
+    if (takeProfitUsd < TRADE_MANAGER.minTakeProfitUsd) {
+      return {
+        ok: false,
+        reason: `Take Profit too small. Minimum is ${TRADE_MANAGER.minTakeProfitUsd} USD`
+      };
+    }
+  }
+
+  return { ok: true };
+}
 /* =========================
    WS REQUEST
 ========================= */
