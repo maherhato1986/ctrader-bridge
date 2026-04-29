@@ -2837,7 +2837,6 @@ app.post('/reject', auth, async (req, res) => {
 });
 
 
-
 app.post('/close-position', auth, async (req, res) => {
   try {
     const { positionId, volume } = req.body;
@@ -2849,8 +2848,6 @@ app.post('/close-position', auth, async (req, res) => {
       });
     }
 
-    let finalVolume = Number(volume || 0);
-
     const positions = await getOpenPositionsFromCTrader();
 
     const found = positions
@@ -2860,49 +2857,34 @@ app.post('/close-position', auth, async (req, res) => {
     if (!found) {
       return res.status(404).json({
         ok: false,
-        message: 'Position not found'
+        message: 'Position not found or already closed'
       });
     }
 
-    if (!finalVolume) {
-      finalVolume = found.volume;
+    const closeVolume = Number(volume || found.volume || 0);
+
+    if (!closeVolume) {
+      return res.status(400).json({
+        ok: false,
+        message: 'Volume is required'
+      });
     }
 
-    console.log('🛑 CLOSE POSITION REQUEST:', {
-      positionId,
-      symbolId: found.symbolId,
-      volume: finalVolume
-    });
+    const result = await closePosition(found.positionId, closeVolume);
 
-    const result = await closePosition(positionId, finalVolume);
-
-    await sendTradeAlertToTelegram('🛑 POSITION CLOSED', {
-      symbol: Number(found.symbolId) === 41 ? 'XAUUSD' : String(found.symbolId || 'UNKNOWN'),
-      action: 'CLOSE',
-      volume: finalVolume,
-      positionId,
-      price: found.entryPrice || '-',
-      status: 'CLOSED'
-    });
-
-    logAuditEvent(req, 'Closed Position From Dashboard', {
-      positionId,
-      symbolId: found.symbolId,
-      volume: finalVolume
-    });
+    const updatedPositions = await getOpenPositionsFromCTrader();
 
     return res.json({
-      ok: !isMarketClosedError(result),
-      positionId: Number(positionId),
-      symbolId: found.symbolId,
-      volume: finalVolume,
-      marketClosed: isMarketClosedError(result),
-      result
+      ok: true,
+      message: 'Position close request sent',
+      positionId: found.positionId,
+      volume: closeVolume,
+      result,
+      openPositionsCount: updatedPositions.length
     });
 
   } catch (err) {
-    console.error('❌ CLOSE POSITION ERROR:', err);
-
+    console.error('CLOSE POSITION ERROR:', err);
     return res.status(500).json({
       ok: false,
       message: err.message
