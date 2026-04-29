@@ -1860,6 +1860,25 @@ function normalizeMoney(value, digits = 2) {
   return n;
 }
 
+// ================= RISK ENGINE =================
+
+function canOpenNewTrade(currentFloatingPnL) {
+  const maxLoss = Number(process.env.MAX_DAILY_LOSS || 500);
+
+  if (currentFloatingPnL <= -maxLoss) {
+    return {
+      allowed: false,
+      reason: "Max daily loss reached"
+    };
+  }
+
+  return { allowed: true };
+}
+
+function preventDuplicateTrades(positions, symbol) {
+  return positions.some(p => p.symbol === symbol);
+}
+
 
 /* =========================
    ROUTES
@@ -2731,6 +2750,29 @@ if (positions.length > 0 && totalProfit < 5) {
   });
 }
 
+    // ===== GET CURRENT DATA =====
+const positions = await getOpenPositionsFromCTrader();
+const dashboard = await getDashboardData(); // إذا عندك فانكشن جاهزة
+
+const floatingPnL = dashboard.floatingPnL || 0;
+
+// ===== RISK CHECK =====
+const riskCheck = canOpenNewTrade(floatingPnL);
+
+if (!riskCheck.allowed) {
+  return res.json({
+    ok: false,
+    message: riskCheck.reason
+  });
+}
+
+// ===== PREVENT DUPLICATE =====
+if (preventDuplicateTrades(positions, "XAUUSD")) {
+  return res.json({
+    ok: false,
+    message: "Position already open on XAUUSD"
+  });
+}
 // =========================
 // 🧠 SMART ENGINE END
 // =========================
