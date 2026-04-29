@@ -1871,6 +1871,16 @@ app.get('/api/dashboard', auth, async (req, res) => {
     const positions = await getOpenPositionsFromCTrader();
     const pending = Array.from(pendingSignals.values());
 
+    function normalizePrice(v) {
+      const n = Number(v || 0);
+      if (!n) return 0;
+
+      // cTrader sometimes returns raw price مثل 4573645 بدل 4573.645
+      if (n > 100000) return n / 1000;
+
+      return n;
+    }
+
     let floatingPnL = 0;
 
     const formattedPositions = await Promise.all(positions.map(async p => {
@@ -1888,7 +1898,7 @@ app.get('/api/dashboard', auth, async (req, res) => {
 
       const lots = volumeUnits / 10000;
 
-      const entryPrice = Number(
+      const entryPrice = normalizePrice(
         p.price ||
         info.entryPrice ||
         p.tradeData?.entryPrice ||
@@ -1907,12 +1917,18 @@ app.get('/api/dashboard', auth, async (req, res) => {
       let currentPrice = 0;
 
       try {
-        currentPrice = await getLiveSpotPriceFromCTrader(symbolId);
+        const live = await getLiveSpotPriceFromCTrader(symbolId);
+        currentPrice = normalizePrice(live);
       } catch (err) {
-        currentPrice = Number(
+        currentPrice = 0;
+      }
+
+      if (!currentPrice) {
+        currentPrice = normalizePrice(
           livePrices[symbolId] ||
           livePrices[41] ||
           p.currentPrice ||
+          p.tradeData?.currentPrice ||
           p.tradeData?.price ||
           p.position?.price ||
           p.price ||
@@ -1929,7 +1945,6 @@ app.get('/api/dashboard', auth, async (req, res) => {
           : 1;
 
       const contractSize = 100;
-
       let calculatedProfit = 0;
 
       if (entryPrice && currentPrice && lots) {
@@ -1994,7 +2009,6 @@ app.get('/api/dashboard', auth, async (req, res) => {
     });
   }
 });
-
 
 app.post('/api/verify-code', (req, res) => {
   const { email, code } = req.body;
