@@ -157,7 +157,11 @@ th{color:#9fb2c8;font-weight:700}
     <div class="card"><h4>BROKER</h4>cTrader Open API <span class="green">●</span></div>
     <div class="card"><h4>ACCOUNT</h4>Demo / USD</div>
     <div class="card"><h4>SERVER LOCATION</h4>DigitalOcean NYC1</div>
-    <div class="card"><h4>DATA SYNC</h4>trades.json <span class="green">SYNCED ●</span></div>
+    <div class="card">
+  <h4>RISK STATUS</h4>
+  <div id="riskStatusText" class="green">NORMAL ●</div>
+  <small id="riskStatusMsg">Risk normal</small>
+</div>
   </section>
 </main>
 </div>
@@ -238,6 +242,7 @@ if (Array.isArray(data.positions) && data.positions.length) {
 }
 
 renderSignals(data.pending || []);
+    renderRiskStatus(data.riskStatus);
 addLog("Dashboard synced successfully", "green");
 
   }catch(e){
@@ -424,6 +429,29 @@ async function killAll(){
   const data = await res.json();
   addLog("Kill switch result: " + JSON.stringify(data), data.ok ? "green" : "red");
   loadData();
+}
+  function renderRiskStatus(risk){
+  const text = document.getElementById("riskStatusText");
+  const msg = document.getElementById("riskStatusMsg");
+
+  if(!text || !msg) return;
+
+  if(!risk){
+    text.className = "yellow";
+    text.innerText = "UNKNOWN ●";
+    msg.innerText = "No risk data";
+    return;
+  }
+
+  if(risk.maxLossHit){
+    text.className = "red";
+    text.innerText = "MAX LOSS HIT ●";
+    msg.innerText = risk.message || "Max daily loss reached";
+  } else {
+    text.className = "green";
+    text.innerText = "NORMAL ●";
+    msg.innerText = risk.message || "Risk normal";
+  }
 }
   function loadTradingViewChart(){
   const symbol = document.getElementById("chartSymbol").value;
