@@ -181,7 +181,7 @@ ws.onmessage = (event) => {
   );
 
   if (hasUsefulData) {
-    renderPositions(data.positions);
+    
     document.getElementById("openCount").innerText = data.positions.length;
   }
 }
