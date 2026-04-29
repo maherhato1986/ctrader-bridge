@@ -215,6 +215,27 @@ function addLog(text, type="green"){
     </tr>
   `).join("");
 }
+
+  async function killAll() {
+  if (!confirm("Are you sure you want to close ALL positions?")) return;
+
+  try {
+    const res = await fetch('/api/close-all', {
+      method: 'POST',
+      headers: {
+        'x-api-key': API_KEY
+      }
+    });
+
+    const data = await res.json();
+
+    alert(data.message || "Done");
+
+  } catch (err) {
+    alert("Error closing positions");
+  }
+}
+  
 async function loadData(){
   try{
    const res = await fetch('/api/dashboard', {
