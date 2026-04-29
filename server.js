@@ -1937,8 +1937,8 @@ app.get('/api/dashboard', auth, async (req, res) => {
       const swap = normalizeMoney(info.swap || p.swap, moneyDigits);
       const commission = normalizeMoney(info.commission || p.commission, moneyDigits);
 
-      const netProfit = calculatedProfit + swap + commission;
-      floatingPnL += netProfit;
+      const netUsd = Number((calculatedProfit + swap + commission).toFixed(2));
+      floatingPnL += netUsd;
 
       return {
         positionId: info.positionId || p.positionId,
@@ -1947,51 +1947,28 @@ app.get('/api/dashboard', auth, async (req, res) => {
         volume: volumeUnits,
         lots: Number(lots.toFixed(2)),
         side: tradeSide === 2 ? 'SELL' : 'BUY',
+        sideText: tradeSide === 2 ? 'SELL' : 'BUY',
         price: entryPrice,
         entryPrice,
         currentPrice,
-        netProfit: Number(netProfit.toFixed(4)),
+        netUsd,
+        netProfit: netUsd,
         status: 'ACTIVE'
       };
     }));
+
+    const cleanPositions = formattedPositions.filter(p => p && p.positionId);
 
     dashboardClients.forEach(client => {
       if (client.readyState === WebSocket.OPEN) {
         client.send(JSON.stringify({
           type: 'dashboard_update',
-          floatingPnL,
-          positions: formattedPositions.filter(p => p && p.positionId)
+          floatingPnL: Number(floatingPnL.toFixed(2)),
+          positions: cleanPositions
         }));
       }
     });
-const positionsWithNetUsd = positions.map(p => {
-  const entry = Number(p.entryPrice || p.price || 0);
-  const current = Number(p.currentPrice || 0);
-  const volume = Number(p.volume || 0);
-  const units = volume / 100;
 
-  const sideText =
-    String(p.side || p.tradeSide || "").toUpperCase().includes("SELL") || Number(p.side) === 2
-      ? "SELL"
-      : "BUY";
-
-  let netUsd = null;
-
-  if (entry && current && units) {
-    netUsd = sideText === "SELL"
-      ? (entry - current) * units
-      : (current - entry) * units;
-  }
-
-  const swap = Number(p.swap || 0) / 100;
-  const commission = Number(p.commission || 0) / 100;
-
-  return {
-    ...p,
-    sideText,
-    netUsd: netUsd !== null ? Number((netUsd + swap + commission).toFixed(2)) : null
-  };
-});
     res.json({
       ok: true,
       mode: MODE,
@@ -2000,9 +1977,9 @@ const positionsWithNetUsd = positions.map(p => {
       equity: Number(account.equity || (Number(account.balance || 0) + floatingPnL)),
       freeMargin: Number(account.freeMargin || account.marginFree || 0),
       usedMargin: Number(account.usedMargin || account.margin || 0),
-      positions: positionsWithNetUsd,
+      positions: cleanPositions,
       pending,
-      floatingPnL
+      floatingPnL: Number(floatingPnL.toFixed(2))
     });
 
   } catch (err) {
@@ -2013,6 +1990,8 @@ const positionsWithNetUsd = positions.map(p => {
     });
   }
 });
+
+
 app.post('/api/verify-code', (req, res) => {
   const { email, code } = req.body;
 
