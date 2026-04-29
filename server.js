@@ -206,18 +206,7 @@ try {
 
 let loginCodes = {};
 
-if (nodemailer) {
-  const transporter = nodemailer.createTransport({
-    // config
-  });
 
-  await transporter.sendMail({
-    // mail options
-  });
-} else {
-  console.log('📭 Email skipped (nodemailer not available)');
-}
-});
 
 /* =========================
    PAYLOAD TYPES (نظيفة)
