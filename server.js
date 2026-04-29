@@ -535,6 +535,31 @@ function buildSignal(body) {
   };
 }
 
+function calculateAutoVolume({ equity, riskPercent, stopLossUsd }) {
+  const minVolume = Number(process.env.MIN_VOLUME_UNITS || 100);      // 0.01 lot
+  const maxVolume = Number(process.env.MAX_VOLUME_UNITS || 1000);     // 0.10 lot
+  const defaultVolume = Number(process.env.DEFAULT_VOLUME_UNITS || 100);
+
+  const riskPct = Number(riskPercent || process.env.RISK_PER_TRADE_PERCENT || 1);
+  const stopDistance = Number(stopLossUsd || 0);
+  const accountEquity = Number(equity || 0);
+
+  if (!accountEquity || !riskPct || !stopDistance) {
+    return defaultVolume;
+  }
+
+  const riskAmountUsd = accountEquity * (riskPct / 100);
+
+  // XAUUSD: 1 lot = 100 oz
+  const lots = riskAmountUsd / (stopDistance * 100);
+  let volumeUnits = Math.round(lots * 10000);
+
+  volumeUnits = Math.max(minVolume, volumeUnits);
+  volumeUnits = Math.min(maxVolume, volumeUnits);
+
+  return volumeUnits;
+}
+
 /* =========================
    WS REQUEST
 ========================= */
