@@ -817,7 +817,37 @@ try {
 } catch (err) {
   currentPrice = 0;
 }
+// =========================
+// 🔥 TAKE PROFIT
+// =========================
+if (profit >= 50) {
+  console.log('💰 TAKE PROFIT HIT:', profit);
 
+  await closePosition(p.positionId);
+
+  await sendTradeAlertToTelegram('💰 AUTO TP CLOSED', {
+    profit,
+    positionId: p.positionId
+  });
+
+  continue;
+}
+
+// =========================
+// 🛑 STOP LOSS
+// =========================
+if (profit <= -100) {
+  console.log('🛑 STOP LOSS HIT:', profit);
+
+  await closePosition(p.positionId);
+
+  await sendTradeAlertToTelegram('🛑 AUTO SL CLOSED', {
+    profit,
+    positionId: p.positionId
+  });
+
+  continue;
+}
 // 🔥 fallback قوي (مهم جداً)
 if (!currentPrice) {
   currentPrice = Number(
@@ -3678,3 +3708,15 @@ setInterval(async () => {
 server.listen(PORT, () => {
   console.log(`🚀 Server running on ${PORT}`);
 });
+
+setInterval(async () => {
+  try {
+    const positions = await getOpenPositionsFromCTrader();
+    const trades = readJson('trades.json') || [];
+
+    await smartExitAI(41, positions, trades);
+
+  } catch (err) {
+    console.log('SmartExit Loop Error:', err.message);
+  }
+}, 5000);
