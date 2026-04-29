@@ -388,18 +388,31 @@ async function rejectSignal(id){
 async function closeOne(positionId, volume){
   if(!confirm("Close this position?")) return;
 
-  const res = await fetch('/close-position', {
-    method:'POST',
-    headers:{
-      'Content-Type':'application/json',
-      'x-api-key':API_KEY
-    },
-    body:JSON.stringify({ positionId, volume })
-  });
+  try {
+    const res = await fetch('/close-position', {
+      method:'POST',
+      headers:{
+        'Content-Type':'application/json',
+        'x-api-key':API_KEY
+      },
+      body:JSON.stringify({ positionId, volume })
+    });
 
-  const data = await res.json();
-  addLog("Close position result: " + JSON.stringify(data), data.ok ? "green" : "red");
-  loadData();
+    const data = await res.json();
+
+    if (data.ok) {
+      addLog("Position closed: " + positionId, "green");
+    } else {
+      addLog("Close failed: " + (data.message || "Unknown error"), "red");
+      alert(data.message || "Close failed");
+    }
+
+    await loadData();
+
+  } catch (e) {
+    addLog("Close connection error: " + e.message, "red");
+    alert("Connection error: " + e.message);
+  }
 }
   
 async function killAll(){
