@@ -13,7 +13,18 @@ const axios = require('axios');
 const path = require('path');
 const crypto = require('crypto');
 
+const TRADE_MANAGER = {
+  enabled: true,
+  requireSLTP: true,
 
+  minTakeProfitUsd: 10,
+  minStopLossUsd: 5,
+
+  breakEvenTriggerUsd: 8,
+  breakEvenBufferUsd: 1,
+
+  allowSecondTradeOnlyIfBE: true
+};
 
 function now() {
   return new Date().toISOString();
