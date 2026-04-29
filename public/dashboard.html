@@ -175,10 +175,16 @@ ws.onmessage = (event) => {
     document.getElementById("dailyPnl").innerText =
       "$ " + Number(data.floatingPnL || 0).toFixed(2);
 
-   if (Array.isArray(data.positions)) {
-      renderPositions(data.positions);
-      document.getElementById("openCount").innerText = data.positions.length;
-    }
+   if (Array.isArray(data.positions) && data.positions.length) {
+  const hasUsefulData = data.positions.some(p =>
+    p.volume || p.lots || p.entryPrice || p.price || p.netProfit || p.unrealizedNetProfit
+  );
+
+  if (hasUsefulData) {
+    renderPositions(data.positions);
+    document.getElementById("openCount").innerText = data.positions.length;
+  }
+}
   }
 };
 
@@ -227,7 +233,9 @@ document.getElementById("equity").innerText =
 
 document.getElementById("dailyPnl").innerText =
   data.floatingPnL !== undefined ? "$ " + Number(data.floatingPnL).toFixed(2) : "$ -";
-renderPositions(data.positions || []);
+if (Array.isArray(data.positions) && data.positions.length) {
+  renderPositions(data.positions);
+}
 
 renderSignals(data.pending || []);
 addLog("Dashboard synced successfully", "green");
