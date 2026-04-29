@@ -1964,7 +1964,34 @@ app.get('/api/dashboard', auth, async (req, res) => {
         }));
       }
     });
+const positionsWithNetUsd = positions.map(p => {
+  const entry = Number(p.entryPrice || p.price || 0);
+  const current = Number(p.currentPrice || 0);
+  const volume = Number(p.volume || 0);
+  const units = volume / 100;
 
+  const sideText =
+    String(p.side || p.tradeSide || "").toUpperCase().includes("SELL") || Number(p.side) === 2
+      ? "SELL"
+      : "BUY";
+
+  let netUsd = null;
+
+  if (entry && current && units) {
+    netUsd = sideText === "SELL"
+      ? (entry - current) * units
+      : (current - entry) * units;
+  }
+
+  const swap = Number(p.swap || 0) / 100;
+  const commission = Number(p.commission || 0) / 100;
+
+  return {
+    ...p,
+    sideText,
+    netUsd: netUsd !== null ? Number((netUsd + swap + commission).toFixed(2)) : null
+  };
+});
     res.json({
       ok: true,
       mode: MODE,
@@ -1973,7 +2000,7 @@ app.get('/api/dashboard', auth, async (req, res) => {
       equity: Number(account.equity || (Number(account.balance || 0) + floatingPnL)),
       freeMargin: Number(account.freeMargin || account.marginFree || 0),
       usedMargin: Number(account.usedMargin || account.margin || 0),
-      positions: formattedPositions,
+      positions: positionsWithNetUsd,
       pending,
       floatingPnL
     });
