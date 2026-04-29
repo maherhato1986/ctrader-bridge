@@ -1,0 +1,20 @@
+[
+  {
+    "token": "d035f74331d012d17795ed5333f2ad00b8b97037eee353befd3f6ac524c2e2e2",
+    "email": "admin@rk-lifts.com",
+    "loginAt": "2026-04-29T06:46:33.185Z",
+    "expiresAt": "2026-04-29T14:46:33.185Z",
+    "ip": "::ffff:46.153.211.214",
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36 Edg/147.0.0.0",
+    "time": "2026-04-29T06:46:33.185Z"
+  },
+  {
+    "token": "78ca4a69ce88d88c048524e1ad856800193e5d9a4488cb1a035ae84b04940fd5",
+    "email": "admin@rk-lifts.com",
+    "loginAt": "2026-04-29T07:02:37.232Z",
+    "expiresAt": "2026-04-29T15:02:37.232Z",
+    "ip": "::ffff:46.153.211.214",
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36",
+    "time": "2026-04-29T07:02:37.232Z"
+  }
+]

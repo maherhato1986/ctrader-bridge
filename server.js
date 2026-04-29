@@ -2812,22 +2812,7 @@ app.post('/reject', auth, async (req, res) => {
   }
 });
 
-const formatted = positions.map(p => {
-  const info = extractPositionInfo(p);
-  const currentPrice = livePrices[info.symbolId] || 0;
-  const entryPrice = Number(info.entryPrice || 0);
-  const volume = info.volume; // تأكد أن extractPositionInfo تجلب الـ volume
 
-  // ... حساب الـ profit الموجود عندك ...
-
-  return {
-    positionId: info.positionId,
-    symbol: 'XAUUSD',
-    volume: volume,        // أضف هذا
-    entryPrice: entryPrice, // أضف هذا
-    profit: Number(profit.toFixed(2))
-  };
-});
 
 app.post('/close-position', auth, async (req, res) => {
   try {
