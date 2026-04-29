@@ -399,6 +399,57 @@ function saveToFile(file, data) {
   fs.writeFileSync(file, JSON.stringify(data, null, 2));
 }
 
+
+const BLOCKED_SIGNALS_FILE = 'blocked_signals.json';
+
+function readArrayFile(file) {
+  try {
+    if (!fs.existsSync(file)) return [];
+    const raw = fs.readFileSync(file, 'utf8');
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed : [parsed];
+  } catch {
+    return [];
+  }
+}
+
+function removePendingSignal(signalId) {
+  pendingSignals.delete(signalId);
+
+  const pendingFromFile = readArrayFile('pending_signals.json')
+    .filter(s => String(s.signalId) !== String(signalId));
+
+  const merged = new Map();
+
+  pendingFromFile.forEach(s => merged.set(String(s.signalId), s));
+  Array.from(pendingSignals.values()).forEach(s => {
+    if (String(s.signalId) !== String(signalId)) {
+      merged.set(String(s.signalId), s);
+    }
+  });
+
+  saveToFile('pending_signals.json', Array.from(merged.values()));
+}
+
+function markSignalBlocked(signal, reason, aiDecision = null) {
+  const blockedSignal = {
+    ...signal,
+    status: 'blocked',
+    blockReason: reason,
+    aiDecision,
+    blockedAt: now()
+  };
+
+  removePendingSignal(signal.signalId);
+
+  const blockedSignals = readArrayFile(BLOCKED_SIGNALS_FILE);
+  blockedSignals.push(blockedSignal);
+  saveToFile(BLOCKED_SIGNALS_FILE, blockedSignals);
+
+  return blockedSignal;
+}
+
+
 async function telegramApi(method, data) {
   if (!TELEGRAM_BOT_TOKEN) {
     throw new Error('Missing TELEGRAM_BOT_TOKEN in .env');
@@ -2626,13 +2677,28 @@ app.post('/approve', auth, async (req, res) => {
 
     console.log('🤖 AI DECISION:', aiDecision);
 
-    if (aiDecision.decision === 'REJECT' || aiDecision.confidence < 60) {
-      return res.status(403).json({
-        ok: false,
-        message: 'AI blocked trade',
-        aiDecision
-      });
-    }
+  if (aiDecision.decision === 'REJECT' || Number(aiDecision.confidence || 0) < 60) {
+  const blockedSignal = markSignalBlocked(
+    signal,
+    'AI blocked trade',
+    aiDecision
+  );
+
+  await sendTradeAlertToTelegram('🚫 TRADE BLOCKED BY AI', {
+    symbol: signal.symbol,
+    action: signal.action,
+    volume: signal.volume || '-',
+    status: `BLOCKED | Confidence: ${aiDecision.confidence || 0}`
+  });
+
+  return res.status(403).json({
+    ok: false,
+    message: 'AI blocked trade',
+    status: 'blocked',
+    signal: blockedSignal,
+    aiDecision
+  });
+}
 
     if (aiDecision.decision !== String(signal.action || '').toUpperCase()) {
       console.log('⚠️ AI changed direction');
@@ -3052,6 +3118,14 @@ app.get('/status', auth, (req, res) => {
       pending = Array.isArray(parsedPending) ? parsedPending : [parsedPending];
     }
 
+    let blocked = [];
+
+if (fs.existsSync('blocked_signals.json')) {
+  const rawBlocked = fs.readFileSync('blocked_signals.json', 'utf8');
+  const parsedBlocked = rawBlocked ? JSON.parse(rawBlocked) : [];
+  blocked = Array.isArray(parsedBlocked) ? parsedBlocked : [parsedBlocked];
+}
+
     let trades = [];
     let rejected = [];
 
@@ -3073,6 +3147,8 @@ app.get('/status', auth, (req, res) => {
       pendingCount: pending.length,
       executedCount: trades.length,
       rejectedCount: rejected.length,
+      blockedCount: blocked.length,
+lastBlocked: blocked[blocked.length - 1] || null,
       lastPending: pending[pending.length - 1] || null,
       lastTrade: trades[trades.length - 1] || null,
       lastRejected: rejected[rejected.length - 1] || null
