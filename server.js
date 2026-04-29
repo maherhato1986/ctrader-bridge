@@ -2921,13 +2921,36 @@ app.post('/approve', auth, async (req, res) => {
 
     console.log('✅ TRADE SAVED:', tradeRecord);
 
-    await sendTradeAlertToTelegram('🚀 TRADE EXECUTED', {
-      symbol: signal.symbol,
-      action: signal.action,
-      volume: finalVolume,
-      positionId: tradeRecord.positionId,
-      status: 'EXECUTED'
-    });
+  const executedPosition =
+  result?.position ||
+  result?.order?.position ||
+  result?.executionEvent?.position ||
+  result?.payload?.position ||
+  result;
+
+const executedPositionId =
+  executedPosition?.positionId ||
+  executedPosition?.id ||
+  result?.positionId ||
+  tradeRecord?.positionId ||
+  "-";
+
+const executedPrice =
+  executedPosition?.price ||
+  executedPosition?.entryPrice ||
+  executedPosition?.tradeData?.openPrice ||
+  result?.price ||
+  tradeRecord?.price ||
+  "-";
+
+await sendTradeAlertToTelegram('🚀 TRADE EXECUTED', {
+  symbol: signal.symbol,
+  action: signal.action,
+  volume: finalVolume,
+  positionId: executedPositionId,
+  price: executedPrice,
+  status: 'EXECUTED'
+});
 
     return res.json({
       ok: true,
