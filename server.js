@@ -2136,7 +2136,39 @@ equity: accountInfo.equity,
   }
 });
 
+app.post('/api/close-all', auth, async (req, res) => {
+  try {
+    const positions = await getOpenPositionsFromCTrader();
 
+    let closed = 0;
+    let failed = 0;
+
+    for (const p of positions) {
+      const info = extractPositionInfo(p);
+
+      try {
+        await closePosition(info.positionId, info.volume);
+        closed++;
+      } catch (err) {
+        console.error("Close error:", err.message);
+        failed++;
+      }
+    }
+
+    res.json({
+      ok: true,
+      message: `Closed ${closed} positions`,
+      closed,
+      failed
+    });
+
+  } catch (err) {
+    res.json({
+      ok: false,
+      message: err.message
+    });
+  }
+});
 
 app.post('/close-all-positions', auth, async (req, res) => {
   logAuditEvent(req, 'KILL SWITCH ACTIVATED');
