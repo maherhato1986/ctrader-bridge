@@ -281,7 +281,7 @@ function renderPositions(positions){
       null;
 
     const netValue = net !== null && net !== undefined
-      ? Number(net).toFixed(2)
+      ? (Number(net) / 100).toFixed(2)
       : "-";
 
     const symbolName =
