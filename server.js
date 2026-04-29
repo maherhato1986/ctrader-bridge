@@ -195,16 +195,28 @@ const CTRADER_WS_URL = `wss://${CTRADER_HOST}:${CTRADER_PORT}`;
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
 const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID || '';
 
-const nodemailer = require('nodemailer');
+let nodemailer = null;
+
+try {
+  nodemailer = require('nodemailer');
+  console.log('📧 nodemailer loaded');
+} catch (err) {
+  console.warn('⚠️ nodemailer not installed, email disabled');
+}
 
 let loginCodes = {};
 
-const transporter = nodemailer.createTransport({
-  service: 'gmail',
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS
-  }
+if (nodemailer) {
+  const transporter = nodemailer.createTransport({
+    // config
+  });
+
+  await transporter.sendMail({
+    // mail options
+  });
+} else {
+  console.log('📭 Email skipped (nodemailer not available)');
+}
 });
 
 /* =========================
