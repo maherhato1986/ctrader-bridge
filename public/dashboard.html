@@ -273,16 +273,39 @@ function renderPositions(positions){
       p.position?.entryPrice ??
       "-";
 
-    const net =
-      p.netProfit ??
-      p.unrealizedNetProfit ??
-      p.moneyNetProfit ??
-      p.position?.netProfit ??
-      null;
+ function normalizePrice(v){
+  const n = Number(v || 0);
+  if (!n) return 0;
+  if (n > 1000000) return n / 1000;
+  return n;
+}
 
-    const netValue = net !== null && net !== undefined
-      ? (Number(net) / 100).toFixed(2)
-      : "-";
+const currentPrice = normalizePrice(
+  p.currentPrice ||
+  p.livePrice ||
+  p.bid ||
+  p.ask ||
+  0
+);
+
+const entry = Number(entryPrice || 0);
+const units = Number(rawVolume || 0) / 100; // XAUUSD: 100 = 0.01 lot = 1 oz
+
+let calculatedNet = null;
+
+if (entry && currentPrice && units) {
+  const isSell = sideText === "SELL";
+  calculatedNet = isSell
+    ? (entry - currentPrice) * units
+    : (currentPrice - entry) * units;
+}
+
+const swap = Number(p.swap || 0) / 100;
+const commission = Number(p.commission || 0) / 100;
+
+const netValue = calculatedNet !== null
+  ? (calculatedNet + swap + commission).toFixed(2)
+  : "-";
 
     const symbolName =
       p.symbol ||
