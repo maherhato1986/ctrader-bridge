@@ -2726,6 +2726,29 @@ app.post('/approve', auth, async (req, res) => {
     // =========================
     const aiDecision = await aiTradeDecision(signal);
 
+    // ================================
+// RISK MANAGER CHECK
+// ================================
+const riskCheck = validateTradeRisk(signal);
+
+if (!riskCheck.ok) {
+  console.log('🚫 RISK MANAGER BLOCK:', riskCheck.reason);
+
+  await sendTradeAlertToTelegram('🚫 TRADE BLOCKED BY RISK MANAGER', {
+    symbol: signal.symbol,
+    action: signal.action,
+    volume: signal.volume || '-',
+    positionId: '-',
+    price: '-',
+    status: `BLOCKED | ${riskCheck.reason}`
+  });
+
+  return res.status(403).json({
+    ok: false,
+    message: riskCheck.reason
+  });
+}
+
     console.log('🤖 AI DECISION:', aiDecision);
 
   if (
