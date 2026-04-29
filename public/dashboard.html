@@ -254,6 +254,13 @@ function renderPositions(positions){
     return;
   }
 
+  function normalizePrice(v){
+    const n = Number(v || 0);
+    if (!n) return 0;
+    if (n > 1000000) return n / 1000;
+    return n;
+  }
+
   body.innerHTML = positions.map(p => {
     const rawVolume =
       p.volume ??
@@ -262,8 +269,8 @@ function renderPositions(positions){
       0;
 
     const lots = p.lots !== undefined
-  ? Number(p.lots).toFixed(2) + " Lots"
-  : Number(rawVolume / 10000).toFixed(2) + " Lots";
+      ? Number(p.lots).toFixed(2) + " Lots"
+      : Number(rawVolume / 10000).toFixed(2) + " Lots";
 
     const entryPrice =
       p.entryPrice ??
@@ -272,40 +279,6 @@ function renderPositions(positions){
       p.tradeData?.entryPrice ??
       p.position?.entryPrice ??
       "-";
-
- function normalizePrice(v){
-  const n = Number(v || 0);
-  if (!n) return 0;
-  if (n > 1000000) return n / 1000;
-  return n;
-}
-
-const currentPrice = normalizePrice(
-  p.currentPrice ||
-  p.livePrice ||
-  p.bid ||
-  p.ask ||
-  0
-);
-
-const entry = Number(entryPrice || 0);
-const units = Number(rawVolume || 0) / 100; // XAUUSD: 100 = 0.01 lot = 1 oz
-
-let calculatedNet = null;
-
-if (entry && currentPrice && units) {
-  const isSell = sideText === "SELL";
-  calculatedNet = isSell
-    ? (entry - currentPrice) * units
-    : (currentPrice - entry) * units;
-}
-
-const swap = Number(p.swap || 0) / 100;
-const commission = Number(p.commission || 0) / 100;
-
-const netValue = calculatedNet !== null
-  ? (calculatedNet + swap + commission).toFixed(2)
-  : "-";
 
     const symbolName =
       p.symbol ||
@@ -321,6 +294,33 @@ const netValue = calculatedNet !== null
       String(sideRaw).toUpperCase().includes("SELL") || Number(sideRaw) === 2
         ? "SELL"
         : "BUY";
+
+    const currentPrice = normalizePrice(
+      p.currentPrice ||
+      p.livePrice ||
+      p.bid ||
+      p.ask ||
+      0
+    );
+
+    const entry = Number(entryPrice || 0);
+    const units = Number(rawVolume || 0) / 100;
+
+    let calculatedNet = null;
+
+    if (entry && currentPrice && units) {
+      const isSell = sideText === "SELL";
+      calculatedNet = isSell
+        ? (entry - currentPrice) * units
+        : (currentPrice - entry) * units;
+    }
+
+    const swap = Number(p.swap || 0) / 100;
+    const commission = Number(p.commission || 0) / 100;
+
+    const netValue = calculatedNet !== null
+      ? (calculatedNet + swap + commission).toFixed(2)
+      : "-";
 
     return `
       <tr>
