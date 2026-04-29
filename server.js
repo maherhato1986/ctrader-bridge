@@ -513,18 +513,19 @@ async function sendSignalToTelegram(signal) {
   }
 
   try {
-    const text = `📡 إشارة جديدة
+   const text = `
+🚀 ${title}
 
-🆔 Signal ID: ${signal.signalId}
-📊 Symbol: ${signal.symbol || '-'}
-📈 Action: ${signal.action || '-'}
-💰 Volume: ${signal.volume ?? '-'}
-⚠️ Risk %: ${signal.riskPercent ?? '-'}
-🛑 Stop Loss $: ${signal.stopLossUsd ?? '-'}
-🎯 Take Profit $: ${signal.takeProfitUsd ?? '-'}
+📊 Symbol: ${data.symbol}
+📈 Action: ${data.action}
+💰 Volume: ${data.volume}
+🆔 Position ID: ${data.positionId || "-"}
+💵 Price: ${data.price || "-"}
+🎯 SL: ${data.stopLossUsd || "-"} USD
+🏆 TP: ${data.takeProfitUsd || "-"} USD
+📊 Status: ${data.status}
 
-⏱ Time: ${new Date().toLocaleString()}
-📌 Status: ${signal.status || 'pending'}
+⏰ ${new Date().toLocaleString()}
 `;
 
     await telegramApi('sendMessage', {
@@ -2513,6 +2514,22 @@ if (newsDecision.blocked) {
       volume: volume !== undefined ? Number(volume) : null
     });
 
+    // AUTO FIX TP/SL
+if (!signal.takeProfitUsd || signal.takeProfitUsd === 0) {
+  signal.takeProfitUsd = signal.stopLossUsd * 2; // RR = 1:2
+}
+
+if (!signal.stopLossUsd || signal.stopLossUsd === 0) {
+  signal.stopLossUsd = 10; // fallback
+}
+
+    const openPositions = await getOpenPositionsFromCTrader();
+
+if (TRADE_MANAGER.allowSecondTradeOnlyIfBE && openPositions.length > 0) {
+  console.log("❌ Trade blocked: existing open position");
+  return res.json({ blocked: true, reason: "Existing position open" });
+}
+
     // ✅ حفظ في الذاكرة
     pendingSignals.set(signal.signalId, signal);
 
@@ -3541,6 +3558,20 @@ function syncTradesWithBroker(positions, trades) {
   const brokerPositionIds = positions.map(p => 
     String(p.positionId || p.tradeData?.positionId || p.position?.positionId)
   );
+
+  async function managePositions() {
+  const positions = await getOpenPositionsFromCTrader();
+
+  for (const p of positions) {
+    const profit = Number(p.netProfit || 0);
+
+    if (profit >= TRADE_MANAGER.breakEvenTriggerUsd) {
+      console.log("🔒 Moving to Break Even:", p.positionId);
+
+      await modifyPositionSL(p.positionId, p.entryPrice + TRADE_MANAGER.breakEvenBufferUsd);
+    }
+  }
+}
 
   // تصفية ملف trades.json: نحتفظ فقط بالصفقات التي لا تزال مفتوحة في المنصة
   const initialLength = trades.length;
