@@ -2678,7 +2678,10 @@ app.post('/approve', auth, async (req, res) => {
 
     console.log('🤖 AI DECISION:', aiDecision);
 
-  if (aiDecision.decision === 'REJECT' || Number(aiDecision.confidence || 0) < 60) {
+  if (
+  aiDecision.decision === 'REJECT' &&
+  Number(aiDecision.confidence || 0) < 40
+) {
   const blockedSignal = markSignalBlocked(
     signal,
     'AI blocked trade',
