@@ -2538,7 +2538,6 @@ async function getCTraderAccountInfo() {
 
 
 
-
 app.post('/approve', auth, async (req, res) => {
   try {
     const { signalId, symbolId } = req.body;
@@ -2563,10 +2562,10 @@ app.post('/approve', auth, async (req, res) => {
           if (Array.isArray(fileData)) {
             signal = fileData.find(s => String(s.signalId) === String(signalId)) || null;
 
-           if (signal) {
-  console.log('⚠️ Signal restored from file:', signalId);
-  pendingSignals.set(signalId, signal);
-}
+            if (signal) {
+              console.log('⚠️ Signal restored from file:', signalId);
+              pendingSignals.set(signalId, signal);
+            }
           }
         }
       } catch (e) {
@@ -2575,10 +2574,9 @@ app.post('/approve', auth, async (req, res) => {
     }
 
     if (!signal) {
-      console.log('❌ Signal not found:', signalId);
       return res.status(404).json({
         ok: false,
-        message: 'Not found'
+        message: 'Signal not found'
       });
     }
 
@@ -2592,44 +2590,48 @@ app.post('/approve', auth, async (req, res) => {
     console.log('📌 SIGNAL TO EXECUTE:', signal);
 
     // =========================
-// 🧠 AI DECISION
-// =========================
-const aiDecision = await aiTradeDecision(signal);
+    // AI DECISION
+    // =========================
+    const aiDecision = await aiTradeDecision(signal);
 
-console.log('🤖 AI DECISION:', aiDecision);
+    console.log('🤖 AI DECISION:', aiDecision);
 
-if (aiDecision.decision === 'REJECT' || aiDecision.confidence < 60) {
-  return res.status(403).json({
-    ok: false,
-    message: '❌ AI blocked trade',
-    aiDecision
-  });
-}
+    if (aiDecision.decision === 'REJECT' || aiDecision.confidence < 60) {
+      return res.status(403).json({
+        ok: false,
+        message: 'AI blocked trade',
+        aiDecision
+      });
+    }
 
-// إذا الاتجاه مختلف
-if (aiDecision.decision !== signal.action.toUpperCase()) {
-  console.log('⚠️ AI changed direction');
-  signal.action = aiDecision.decision.toLowerCase();
-}
-logAuditEvent(req, 'Execute Trade Start', {
-  symbol: signal.symbol,
-  action: signal.action
-});
- 
-const nowTime = Date.now();
+    if (aiDecision.decision !== String(signal.action || '').toUpperCase()) {
+      console.log('⚠️ AI changed direction');
+      signal.action = aiDecision.decision.toLowerCase();
+    }
 
-const EXECUTION_COOLDOWN = Number(process.env.EXECUTION_COOLDOWN || 15000);
+    logAuditEvent(req, 'Execute Trade Start', {
+      symbol: signal.symbol,
+      action: signal.action
+    });
 
-if (nowTime - lastExecutionTime < EXECUTION_COOLDOWN){
-  console.log('⛔ Duplicate execution blocked');
-  return res.status(429).json({
-    ok: false,
-    message: 'Duplicate execution blocked'
-  });
-}
+    // =========================
+    // EXECUTION COOLDOWN
+    // =========================
+    const nowTime = Date.now();
+    const EXECUTION_COOLDOWN = Number(process.env.EXECUTION_COOLDOWN || 15000);
 
-lastExecutionTime = nowTime;
+    if (nowTime - lastExecutionTime < EXECUTION_COOLDOWN) {
+      return res.status(429).json({
+        ok: false,
+        message: 'Duplicate execution blocked'
+      });
+    }
 
+    lastExecutionTime = nowTime;
+
+    // =========================
+    // SYMBOL RESOLUTION
+    // =========================
     let finalSymbolId = Number(symbolId || 0);
     let resolvedSymbol = null;
 
@@ -2640,168 +2642,110 @@ lastExecutionTime = nowTime;
       console.log('✅ Resolved symbolId:', finalSymbolId);
     }
 
+    // =========================
+    // ACCOUNT + RISK DATA
+    // =========================
     const accountInfo = await getCTraderAccountInfo();
-const accountBalance = Number(accountInfo.equity || accountInfo.balance || process.env.TEST_ACCOUNT_BALANCE || 500);
-const maxDailyLoss = Number(process.env.MAX_DAILY_LOSS || 50);
+    const accountEquity = Number(
+      accountInfo.equity ||
+      accountInfo.balance ||
+      process.env.TEST_ACCOUNT_BALANCE ||
+      500
+    );
 
-if (accountBalance < maxDailyLoss) {
-  return res.status(403).json({
-    ok: false,
-    message: 'Account below safety threshold'
-  });
-}
+    const openPositions = await getOpenPositionsFromCTrader();
 
-console.log('💰 ACCOUNT INFO:', accountInfo);
-console.log('💰 RISK BALANCE USED:', accountBalance);
+    let currentFloatingPnL = 0;
 
-    let finalVolume = signal.volume;
+    for (const p of openPositions) {
+      const raw =
+        p.netProfit ??
+        p.unrealizedNetProfit ??
+        p.position?.netProfit ??
+        0;
 
-    if (!finalVolume) {
-      console.log('⚠️ No volume in signal, calculating from risk...');
-      finalVolume = calculateGoldVolumeFromRisk({
-        balance: accountBalance,
-        riskPercent: signal.riskPercent || 0.01,
-        stopLossUsd: signal.stopLossUsd || 10
+      const digits =
+        p.moneyDigits ??
+        p.position?.moneyDigits ??
+        2;
+
+      currentFloatingPnL += Number(raw) / Math.pow(10, digits);
+    }
+
+    const maxDailyLoss = Number(process.env.MAX_DAILY_LOSS_USD || process.env.MAX_DAILY_LOSS || 500);
+
+    if (currentFloatingPnL <= -Math.abs(maxDailyLoss)) {
+      return res.status(403).json({
+        ok: false,
+        message: 'Blocked: max daily loss reached',
+        floatingPnL: Number(currentFloatingPnL.toFixed(2)),
+        maxDailyLoss
       });
     }
 
-// تأكد أنه رقم
-finalVolume = Number(finalVolume);
-
-// تحويل lot إلى units
-if (finalVolume > 0 && finalVolume < 10) {
-  finalVolume = finalVolume * 100000;
-}
-
-// ضبط نهائي
-finalVolume = Math.round(finalVolume);
-
-// حدود الأمان
-const minUnits = Number(process.env.MIN_VOLUME_UNITS || 1000);
-const maxUnits = Number(process.env.MAX_VOLUME_UNITS || 50000);
-
-if (finalVolume < minUnits) finalVolume = minUnits;
-if (finalVolume > maxUnits) finalVolume = maxUnits;
-
-console.log('📏 FINAL SAFE VOLUME:', finalVolume);
-
-
-const positionDecision = await canOpenNewPosition(finalSymbolId, signal.action);
-
-console.log('🧠 POSITION DECISION:', positionDecision);
-
-
-if (!positionDecision.allowed) {
-
-  // إذا السبب اتجاه معاكس → اغلق وكمّل
-  if (positionDecision.reason.includes('Opposite direction')) {
-
-    console.log('🔄 Closing opposite positions before new trade...');
-
-    const positions = await getOpenPositionsFromCTrader();
-
-    const oppositePositions = positions.filter(p => {
-      const pSymbolId =
-        p.symbolId ||
-        p.tradeData?.symbolId ||
-        p.position?.symbolId;
-
-      return Number(pSymbolId) === Number(finalSymbolId);
+    // =========================
+    // PREVENT DUPLICATE SYMBOL
+    // =========================
+    const sameSymbolPositions = openPositions.filter(p => {
+      const info = extractPositionInfo(p);
+      return Number(info.symbolId) === Number(finalSymbolId);
     });
 
-  await Promise.all(
-  oppositePositions.map(p => {
-    const info = extractPositionInfo(p);
-    return closePosition(info.positionId, info.volume);
-  })
-);
-
-    console.log('✅ Old positions closed, executing new trade...');
-
-  } else {
-    // أي سبب ثاني → وقف
-    return res.status(409).json({
-      ok: false,
-      message: positionDecision.reason,
-      symbolId: finalSymbolId
-    });
-  }
-}
+    if (sameSymbolPositions.length > 0) {
+      return res.status(409).json({
+        ok: false,
+        message: 'Blocked: position already open on this symbol',
+        symbolId: finalSymbolId
+      });
+    }
 
     // =========================
-// 🧠 SMART ENGINE START
-// =========================
+    // VOLUME / AUTO LOT
+    // =========================
+    let finalVolume = Number(signal.volume || 0);
 
-const positions = await getOpenPositionsFromCTrader();
+    if (!finalVolume) {
+      console.log('⚠️ No volume in signal, calculating auto volume...');
 
-// 1. منع الدخول إذا فيه خسارة
-const hasLosing = positions.some(p => {
-  const raw =
-    p.netProfit ??
-    p.unrealizedNetProfit ??
-    p.position?.netProfit ??
-    0;
+      if (typeof calculateAutoVolume === 'function') {
+        finalVolume = calculateAutoVolume({
+          equity: accountEquity,
+          riskPercent: signal.riskPercent,
+          stopLossUsd: signal.stopLossUsd
+        });
+      } else {
+        finalVolume = calculateGoldVolumeFromRisk({
+          balance: accountEquity,
+          riskPercent: signal.riskPercent || 1,
+          stopLossUsd: signal.stopLossUsd || 10
+        });
+      }
+    }
 
-  return Number(raw) < 0;
-});
+    finalVolume = Number(finalVolume);
 
-if (hasLosing) {
-  return res.status(409).json({
-    ok: false,
-    message: '❌ Blocked: losing position exists'
-  });
-}
+    // إذا القيمة Lot مثل 0.01 أو 0.10 نحولها units
+    if (finalVolume > 0 && finalVolume < 10) {
+      finalVolume = finalVolume * 10000;
+    }
 
-// 2. منع التعزيز إذا الربح ضعيف
-const totalProfit = positions.reduce((sum, p) => {
-  const raw =
-    p.netProfit ??
-    p.unrealizedNetProfit ??
-    p.position?.netProfit ??
-    0;
+    finalVolume = Math.round(finalVolume);
 
-  const digits =
-    p.moneyDigits ??
-    p.position?.moneyDigits ??
-    2;
+    const minUnits = Number(process.env.MIN_VOLUME_UNITS || 100);
+    const maxUnits = Number(process.env.MAX_VOLUME_UNITS || 1000);
 
-  return sum + (Number(raw) / Math.pow(10, digits));
-}, 0);
+    if (finalVolume < minUnits) finalVolume = minUnits;
+    if (finalVolume > maxUnits) finalVolume = maxUnits;
 
-if (positions.length > 0 && totalProfit < 5) {
-  return res.status(409).json({
-    ok: false,
-    message: '⛔ Blocked: profit too small to pyramid'
-  });
-}
+    signal.volume = finalVolume;
 
-    // ===== GET CURRENT DATA =====
-const positions = await getOpenPositionsFromCTrader();
-const dashboard = await getDashboardData(); // إذا عندك فانكشن جاهزة
+    console.log('💰 ACCOUNT INFO:', accountInfo);
+    console.log('📉 FLOATING PNL:', currentFloatingPnL);
+    console.log('📏 FINAL SAFE VOLUME:', finalVolume);
 
-const floatingPnL = dashboard.floatingPnL || 0;
-
-// ===== RISK CHECK =====
-const riskCheck = canOpenNewTrade(floatingPnL);
-
-if (!riskCheck.allowed) {
-  return res.json({
-    ok: false,
-    message: riskCheck.reason
-  });
-}
-
-// ===== PREVENT DUPLICATE =====
-if (preventDuplicateTrades(positions, "XAUUSD")) {
-  return res.json({
-    ok: false,
-    message: "Position already open on XAUUSD"
-  });
-}
-// =========================
-// 🧠 SMART ENGINE END
-// =========================
-
+    // =========================
+    // EXECUTE TRADE
+    // =========================
     console.log('🚀 EXECUTING REAL TRADE...');
     console.log({
       mode: MODE,
@@ -2812,26 +2756,27 @@ if (preventDuplicateTrades(positions, "XAUUSD")) {
       volume: finalVolume
     });
 
- const result = await executeTradeWithAlert({
-  symbolId: finalSymbolId,
-  side: String(signal.action || '').toUpperCase(),
-  volume: finalVolume
-});
+    const result = await executeTradeWithAlert({
+      symbolId: finalSymbolId,
+      side: String(signal.action || '').toUpperCase(),
+      volume: finalVolume
+    });
 
-
-console.log('📊 ORDER RESULT:', result);
+    console.log('📊 ORDER RESULT:', result);
 
     logAuditEvent(req, 'Executed Trade', {
-  symbol: signal.symbol,
-  volume: finalVolume,
-  action: signal.action
-});
+      symbol: signal.symbol,
+      volume: finalVolume,
+      action: signal.action
+    });
+
     executedSignals.add(signalId);
     pendingSignals.delete(signalId);
 
     saveToFile('pending_signals.json', Array.from(pendingSignals.values()));
 
     let trades = [];
+
     try {
       if (fs.existsSync('trades.json')) {
         const rawTrades = fs.readFileSync('trades.json', 'utf8');
@@ -2843,39 +2788,38 @@ console.log('📊 ORDER RESULT:', result);
       trades = [];
     }
 
-const tradeRecord = {
-  signalId,
-  symbol: signal.symbol,
-  action: signal.action,
-  volume: finalVolume,
-  symbolId: finalSymbolId,
-  resolvedSymbol,
+    const tradeRecord = {
+      signalId,
+      symbol: signal.symbol,
+      action: signal.action,
+      volume: finalVolume,
+      symbolId: finalSymbolId,
+      resolvedSymbol,
 
-  // 🔥 أهم إضافة
- positionId:
-  result?.payload?.positionId ||
-  result?.payload?.executionEvent?.position?.positionId ||
-  null,
+      positionId:
+        result?.payload?.positionId ||
+        result?.payload?.executionEvent?.position?.positionId ||
+        null,
 
-  atr: signal.atr || 0.5,
+      atr: signal.atr || 0.5,
 
-  result,
-  time: now(),
-  status: 'executed'
-};
+      result,
+      time: now(),
+      status: 'executed'
+    };
 
     trades.push(tradeRecord);
     saveToFile('trades.json', trades);
 
     console.log('✅ TRADE SAVED:', tradeRecord);
 
-await sendTradeAlertToTelegram('🚀 TRADE EXECUTED', {
-  symbol: signal.symbol,
-  action: signal.action,
-  volume: finalVolume,
-  positionId: tradeRecord.positionId,
-  status: 'EXECUTED'
-});
+    await sendTradeAlertToTelegram('🚀 TRADE EXECUTED', {
+      symbol: signal.symbol,
+      action: signal.action,
+      volume: finalVolume,
+      positionId: tradeRecord.positionId,
+      status: 'EXECUTED'
+    });
 
     return res.json({
       ok: true,
