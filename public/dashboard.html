@@ -318,9 +318,9 @@ function renderPositions(positions){
     const swap = Number(p.swap || 0) / 100;
     const commission = Number(p.commission || 0) / 100;
 
-    const netValue = calculatedNet !== null
-      ? (calculatedNet + swap + commission).toFixed(2)
-      : "-";
+    const netValue = p.netUsd !== null && p.netUsd !== undefined
+  ? Number(p.netUsd).toFixed(2)
+  : "-";
 
     return `
       <tr>
