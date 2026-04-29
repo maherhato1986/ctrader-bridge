@@ -1871,13 +1871,13 @@ app.get('/api/dashboard', auth, async (req, res) => {
     const positions = await getOpenPositionsFromCTrader();
     const pending = Array.from(pendingSignals.values());
 
+    const MAX_DAILY_LOSS_USD = Number(process.env.MAX_DAILY_LOSS_USD || 500);
+    const AUTO_KILL_ON_MAX_LOSS = String(process.env.AUTO_KILL_ON_MAX_LOSS || "false") === "true";
+
     function normalizePrice(v) {
       const n = Number(v || 0);
       if (!n) return 0;
-
-      // cTrader sometimes returns raw price مثل 4573645 بدل 4573.645
       if (n > 100000) return n / 1000;
-
       return n;
     }
 
@@ -1976,14 +1976,62 @@ app.get('/api/dashboard', auth, async (req, res) => {
       };
     }));
 
-    const cleanPositions = formattedPositions.filter(p => p && p.positionId);
+    let cleanPositions = formattedPositions.filter(p => p && p.positionId);
+
+    let riskStatus = {
+      maxDailyLossUsd: MAX_DAILY_LOSS_USD,
+      autoKillEnabled: AUTO_KILL_ON_MAX_LOSS,
+      maxLossHit: Number(floatingPnL) <= -Math.abs(MAX_DAILY_LOSS_USD),
+      actionTaken: false,
+      closed: 0,
+      failed: 0,
+      message: 'Risk normal'
+    };
+
+    if (riskStatus.maxLossHit) {
+      riskStatus.message = `Max daily loss reached: ${Number(floatingPnL).toFixed(2)}`;
+
+      if (AUTO_KILL_ON_MAX_LOSS && cleanPositions.length) {
+        const closeResults = [];
+
+        for (const pos of cleanPositions) {
+          try {
+            const result = await closePosition(pos.positionId, pos.volume);
+            closeResults.push({ ok: true, positionId: pos.positionId, result });
+          } catch (err) {
+            closeResults.push({ ok: false, positionId: pos.positionId, message: err.message });
+          }
+        }
+
+        riskStatus.actionTaken = true;
+        riskStatus.closed = closeResults.filter(r => r.ok).length;
+        riskStatus.failed = closeResults.filter(r => !r.ok).length;
+        riskStatus.message = `AUTO KILL executed. Closed: ${riskStatus.closed}, Failed: ${riskStatus.failed}`;
+
+        const updatedPositions = await getOpenPositionsFromCTrader();
+        cleanPositions = updatedPositions.map(p => {
+          const info = extractPositionInfo(p);
+          return {
+            positionId: info.positionId || p.positionId,
+            symbolId: info.symbolId || p.tradeData?.symbolId || 41,
+            symbol: Number(info.symbolId || p.tradeData?.symbolId || 41) === 41 ? 'XAUUSD' : String(info.symbolId || '-'),
+            volume: Number(info.volume || p.tradeData?.volume || p.volume || 0),
+            lots: Number((Number(info.volume || p.tradeData?.volume || p.volume || 0) / 10000).toFixed(2)),
+            side: String(info.side).toUpperCase().includes('SELL') ? 'SELL' : 'BUY',
+            sideText: String(info.side).toUpperCase().includes('SELL') ? 'SELL' : 'BUY',
+            status: 'ACTIVE'
+          };
+        }).filter(p => p && p.positionId);
+      }
+    }
 
     dashboardClients.forEach(client => {
       if (client.readyState === WebSocket.OPEN) {
         client.send(JSON.stringify({
           type: 'dashboard_update',
           floatingPnL: Number(floatingPnL.toFixed(2)),
-          positions: cleanPositions
+          positions: cleanPositions,
+          riskStatus
         }));
       }
     });
@@ -1998,7 +2046,8 @@ app.get('/api/dashboard', auth, async (req, res) => {
       usedMargin: Number(account.usedMargin || account.margin || 0),
       positions: cleanPositions,
       pending,
-      floatingPnL: Number(floatingPnL.toFixed(2))
+      floatingPnL: Number(floatingPnL.toFixed(2)),
+      riskStatus
     });
 
   } catch (err) {
