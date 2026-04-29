@@ -784,23 +784,27 @@ async function applyBreakEvenLogic(symbolId, targetPositions = [], trades = []) 
   0
 );
 
-    let currentPrice = 0;
+let currentPrice = 0;
 
 try {
-  currentPrice = await getLiveSpotPriceFromCTrader(info.symbolId);
+  const live = await getLiveSpotPriceFromCTrader(symbolId);
+  currentPrice = Number(live || 0);
 } catch (err) {
-  console.log('⚠️ Live price failed, fallback used');
+  currentPrice = 0;
+}
 
- currentPrice = Number(
-  livePrices[symbolId] ||
-  livePrices[41] ||
-  p.currentPrice ||
-  p.tradeData?.price ||
-  p.position?.price ||
-  p.price ||
-  entryPrice ||
-  0
-);
+// 🔥 fallback قوي (مهم جداً)
+if (!currentPrice) {
+  currentPrice = Number(
+    livePrices[symbolId] ||
+    livePrices[41] ||
+    p.currentPrice ||
+    p.tradeData?.currentPrice ||
+    p.tradeData?.price ||
+    p.position?.price ||
+    p.price ||
+    entryPrice
+  );
 }
 
       if (!entryPrice || !currentPrice) continue;
