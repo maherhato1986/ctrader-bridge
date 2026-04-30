@@ -925,7 +925,25 @@ async function applyBreakEvenLogic(symbolId, targetPositions = [], trades = []) 
       const side = getPositionSide(p);
       const isBuy = side.includes('BUY');
 
-      if (!entryPrice || !currentPrice || !side) continue;
+      console.log('PRICE CHECK:', {
+        symbolId,
+        positionId,
+        side,
+        entryPrice,
+        currentPrice,
+        breakEvenDone: trade.breakEvenDone || false
+      });
+
+      if (!entryPrice || !currentPrice || !side) {
+        console.log('BREAK EVEN SKIPPED - missing data:', {
+          symbolId,
+          positionId,
+          entryPrice,
+          currentPrice,
+          side
+        });
+        continue;
+      }
 
       const triggerUsd = Number(process.env.BREAK_EVEN_TRIGGER_USD || 5);
       const bufferUsd = Number(process.env.BREAK_EVEN_BUFFER_USD || 0.5);
@@ -933,6 +951,14 @@ async function applyBreakEvenLogic(symbolId, targetPositions = [], trades = []) 
       const profitDistance = isBuy
         ? currentPrice - entryPrice
         : entryPrice - currentPrice;
+
+      console.log('BREAK EVEN DISTANCE:', {
+        symbolId,
+        positionId,
+        side,
+        triggerUsd,
+        profitDistance
+      });
 
       if (profitDistance < triggerUsd) continue;
 
@@ -960,7 +986,6 @@ async function applyBreakEvenLogic(symbolId, targetPositions = [], trades = []) 
     console.log('Break-even error:', err.message);
   }
 }
-
 async function applyTrailingStop(symbolId, targetPositions = [], trades = []) {
   try {
     if (!Array.isArray(targetPositions) || targetPositions.length === 0) return;
