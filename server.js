@@ -3948,23 +3948,18 @@ for (const symbolId of uniqueSymbols) {
   console.log('BREAK EVEN STATUS:', breakEvenEnabled);
 
   if (breakEvenEnabled) {
-    console.log('CALLING BREAK EVEN...', { symbolId });
-    await applyBreakEven(symbolId, targetPositions, trades);
+  console.log('CALLING BREAK EVEN...', { symbolId });
+  await applyBreakEven(symbolId, targetPositions, trades);
+}
 
-await applyTrailingStop(symbolId, targetPositions, trades);
-  }
+const trailingEnabled = process.env.TRAILING_STOP_ENABLED === 'true';
+console.log('TRAILING STATUS:', trailingEnabled);
 
-  // =========================
-  // 🔸 Trailing Stop
-  // =========================
-  const trailingEnabled = process.env.TRAILING_STOP_ENABLED === 'true';
-
-  console.log('TRAILING STATUS:', trailingEnabled);
-
-  if (trailingEnabled) {
-    console.log('CALLING TRAILING...', { symbolId });
-    await applyTrailingStop(symbolId, symbolPositions, trades);
-  }
+if (trailingEnabled) {
+  console.log('CALLING TRAILING...', { symbolId });
+  await applyTrailingStop(symbolId, targetPositions, trades);
+}
+  
 
   // =========================
   // 🔸 Smart Exit AI
