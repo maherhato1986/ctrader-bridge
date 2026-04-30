@@ -3705,36 +3705,59 @@ setInterval(async () => {
     // =========================
     // STEP 6: إدارة الصفقات الذكية
     // =========================
-    for (const symbolId of uniqueSymbols) {
-      const symbolPositions = positions.filter(p => {
-        const pSymbolId =
-          p.symbolId ||
-          p.tradeData?.symbolId ||
-          p.position?.symbolId;
+for (const symbolId of uniqueSymbols) {
 
-        return Number(pSymbolId) === Number(symbolId);
-      });
-console.log('CALLING BREAK EVEN...', {
-  symbolId,
-  positionsCount: symbolPositions.length
-});
-      // Break Even
-      console.log('BREAK EVEN STATUS:', process.env.BREAK_EVEN_ENABLED);
+  const symbolPositions = positions.filter(p => {
+    const pSymbolId =
+      p.symbolId ||
+      p.tradeData?.symbolId ||
+      p.position?.symbolId;
 
-if (process.env.BREAK_EVEN_ENABLED === 'true') {
-        await applyBreakEvenLogic(symbolId, symbolPositions, trades);
-      }
+    return Number(pSymbolId) === Number(symbolId);
+  });
 
-      // Trailing Stop
-      if (process.env.TRAILING_STOP_ENABLED === 'true') {
-        await applyTrailingStop(symbolId, symbolPositions, trades);
-      }
+  // 🔹 General Log
+  console.log('SYMBOL PROCESSING:', {
+    symbolId,
+    positionsCount: symbolPositions.length
+  });
 
-      // Smart Exit AI
-      if (process.env.SMART_EXIT_ENABLED === 'true') {
-        await smartExitAI(symbolId, symbolPositions, trades);
-      }
-    }
+  // =========================
+  // 🔸 Break Even
+  // =========================
+  const breakEvenEnabled = process.env.BREAK_EVEN_ENABLED === 'true';
+
+  console.log('BREAK EVEN STATUS:', breakEvenEnabled);
+
+  if (breakEvenEnabled) {
+    console.log('CALLING BREAK EVEN...', { symbolId });
+    await applyBreakEvenLogic(symbolId, symbolPositions, trades);
+  }
+
+  // =========================
+  // 🔸 Trailing Stop
+  // =========================
+  const trailingEnabled = process.env.TRAILING_STOP_ENABLED === 'true';
+
+  console.log('TRAILING STATUS:', trailingEnabled);
+
+  if (trailingEnabled) {
+    console.log('CALLING TRAILING...', { symbolId });
+    await applyTrailingStop(symbolId, symbolPositions, trades);
+  }
+
+  // =========================
+  // 🔸 Smart Exit AI
+  // =========================
+  const smartExitEnabled = process.env.SMART_EXIT_ENABLED === 'true';
+
+  console.log('SMART EXIT STATUS:', smartExitEnabled);
+
+  if (smartExitEnabled) {
+    console.log('CALLING SMART EXIT...', { symbolId });
+    await smartExitAI(symbolId, symbolPositions, trades);
+  }
+}
 
     // =========================
     // STEP 7: حفظ التحديثات
