@@ -916,9 +916,19 @@ async function applyBreakEvenLogic(symbolId, targetPositions = [], trades = []) 
 
     for (const p of targetPositions) {
       const positionId = getPositionId(p);
-      const trade = trades.find(t => Number(t.positionId) === positionId && !t.exitReason);
+      let trade = trades.find(t => Number(t.positionId) === positionId && !t.exitReason);
 
-      if (!positionId || !trade || trade.breakEvenDone) continue;
+if (!trade) {
+  trade = {
+    positionId,
+    symbolId,
+    breakEvenDone: false,
+    source: 'broker_sync'
+  };
+  trades.push(trade);
+}
+
+      if (!positionId || trade.breakEvenDone) continue;
 
       const entryPrice = getPositionEntry(p);
       const currentPrice = await getManagedCurrentPrice(symbolId, p);
