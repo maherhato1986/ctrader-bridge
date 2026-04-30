@@ -870,117 +870,94 @@ function findSymbolByScanWs({ search = 'XAU', batchSize = 500, maxAssetId = 1000
   });
 }
 
+function getPositionSide(p) {
+  return String(
+    p.tradeSide ||
+    p.tradeData?.tradeSide ||
+    p.position?.tradeSide ||
+    ''
+  ).toUpperCase();
+}
 
+function getPositionId(p) {
+  return Number(p.positionId || p.tradeData?.positionId || p.position?.positionId || 0);
+}
+
+function getPositionEntry(p) {
+  return Number(p.entryPrice || p.tradeData?.entryPrice || p.tradeData?.openPrice || p.position?.entryPrice || 0);
+}
+
+function getPositionVolume(p) {
+  return Number(p.volume || p.tradeData?.volume || p.position?.volume || 0);
+}
+
+function getPositionStopLoss(p) {
+  return Number(p.stopLoss || p.tradeData?.stopLoss || p.position?.stopLoss || 0);
+}
+
+async function getManagedCurrentPrice(symbolId, p) {
+  const price = Number(
+    livePrices[symbolId] ||
+    livePrices[41] ||
+    p.currentPrice ||
+    p.price ||
+    p.tradeData?.currentPrice ||
+    p.tradeData?.price ||
+    p.position?.price ||
+    0
+  );
+
+  return price;
+}
 
 async function applyBreakEvenLogic(symbolId, targetPositions = [], trades = []) {
   try {
     if (!Array.isArray(targetPositions) || targetPositions.length === 0) return;
 
     for (const p of targetPositions) {
-      const trade = trades.find(t =>
-        Number(t.positionId) === Number(p.positionId) &&
-        !t.exitReason
-      );
+      const positionId = getPositionId(p);
+      const trade = trades.find(t => Number(t.positionId) === positionId && !t.exitReason);
 
-      if (!trade || trade.breakEvenDone) continue;
+      if (!positionId || !trade || trade.breakEvenDone) continue;
 
-      const atr = Number(trade.atr || 0.5);
+      const entryPrice = getPositionEntry(p);
+      const currentPrice = await getManagedCurrentPrice(symbolId, p);
+      const side = getPositionSide(p);
+      const isBuy = side.includes('BUY');
 
-      const entryPrice = Number(
-  p.price ||
-  info.entryPrice ||
-  p.tradeData?.entryPrice ||
-  p.tradeData?.openPrice ||
-  p.position?.entryPrice ||
-  0
-);
+      if (!entryPrice || !currentPrice || !side) continue;
 
-let currentPrice = 0;
-
-try {
-  const live = await getLiveSpotPriceFromCTrader(symbolId);
-  currentPrice = Number(live || 0);
-} catch (err) {
-  currentPrice = 0;
-}
-// =========================
-// 🔥 TAKE PROFIT
-// =========================
-if (profit >= 50) {
-  console.log('💰 TAKE PROFIT HIT:', profit);
-
-  await closePosition(p.positionId);
-
-  await sendTradeAlertToTelegram('💰 AUTO TP CLOSED', {
-    profit,
-    positionId: p.positionId
-  });
-
-  continue;
-}
-
-// =========================
-// 🛑 STOP LOSS
-// =========================
-if (profit <= -100) {
-  console.log('🛑 STOP LOSS HIT:', profit);
-
-  await closePosition(p.positionId);
-
-  await sendTradeAlertToTelegram('🛑 AUTO SL CLOSED', {
-    profit,
-    positionId: p.positionId
-  });
-
-  continue;
-}
-// 🔥 fallback قوي (مهم جداً)
-if (!currentPrice) {
-  currentPrice = Number(
-    livePrices[symbolId] ||
-    livePrices[41] ||
-    p.currentPrice ||
-    p.tradeData?.currentPrice ||
-    p.tradeData?.price ||
-    p.position?.price ||
-    p.price ||
-    entryPrice
-  );
-}
-
-      if (!entryPrice || !currentPrice) continue;
-
-      const isBuy =
-        String(p.tradeData?.tradeSide || p.tradeSide || p.position?.tradeSide || '')
-          .toUpperCase() === 'BUY';
+      const triggerUsd = Number(process.env.BREAK_EVEN_TRIGGER_USD || 5);
+      const bufferUsd = Number(process.env.BREAK_EVEN_BUFFER_USD || 0.5);
 
       const profitDistance = isBuy
         ? currentPrice - entryPrice
         : entryPrice - currentPrice;
 
-      if (profitDistance < atr * 1.2) continue;
+      if (profitDistance < triggerUsd) continue;
 
-      const buffer = atr * 0.1;
-      const newSL = isBuy ? entryPrice + buffer : entryPrice - buffer;
+      const newSL = isBuy
+        ? entryPrice + bufferUsd
+        : entryPrice - bufferUsd;
 
-      console.log('🧠 BREAK EVEN TRIGGERED:', {
+      console.log('BREAK EVEN TRIGGERED:', {
         symbolId,
-        positionId: p.positionId,
+        positionId,
+        side,
         entryPrice,
         currentPrice,
-        atr,
         profitDistance,
         newSL
       });
 
-      await modifyStopLoss(p.positionId, newSL);
+      await modifyStopLoss(positionId, newSL);
 
       trade.breakEvenDone = true;
       trade.breakEvenAt = now();
       trade.breakEvenSL = newSL;
     }
   } catch (err) {
-    console.log('⚠️ Break-even error:', err.message);
+    console.log('Break-even error:', err.message);
   }
 }
 
@@ -989,62 +966,48 @@ async function applyTrailingStop(symbolId, targetPositions = [], trades = []) {
     if (!Array.isArray(targetPositions) || targetPositions.length === 0) return;
 
     for (const p of targetPositions) {
-      const trade = trades.find(t =>
-        Number(t.positionId) === Number(p.positionId) &&
-        !t.exitReason
-      );
+      const positionId = getPositionId(p);
+      const trade = trades.find(t => Number(t.positionId) === positionId && !t.exitReason);
 
-      if (!trade) continue;
+      if (!positionId || !trade || !trade.breakEvenDone) continue;
 
-      const atr = Number(trade.atr || 0.5);
+      const entryPrice = getPositionEntry(p);
+      const currentPrice = await getManagedCurrentPrice(symbolId, p);
+      const currentSL = getPositionStopLoss(p);
+      const side = getPositionSide(p);
+      const isBuy = side.includes('BUY');
 
-      const entryPrice = Number(
-        p.entryPrice ||
-        p.tradeData?.entryPrice ||
-        p.position?.entryPrice ||
-        0
-      );
+      if (!entryPrice || !currentPrice || !side) continue;
 
-     const currentPrice = await getLiveSpotPriceFromCTrader(info.symbolId);
-
-      const currentSL = Number(
-        p.stopLoss ||
-        p.tradeData?.stopLoss ||
-        p.position?.stopLoss ||
-        0
-      );
-
-      if (!entryPrice || !currentPrice) continue;
-
-      const profitDistance = Math.abs(currentPrice - entryPrice);
-
-      if (profitDistance < atr * 1.5) continue;
-
-      const isBuy =
-        (p.tradeData?.tradeSide || p.tradeSide || '').toUpperCase() === 'BUY';
+      const trailingDistanceUsd = Number(process.env.TRAILING_DISTANCE_USD || 3);
 
       let newSL;
 
       if (isBuy) {
-        newSL = currentPrice - atr * 0.8;
-        if (newSL <= currentSL) continue;
+        newSL = currentPrice - trailingDistanceUsd;
+        if (currentSL && newSL <= currentSL) continue;
+        if (newSL <= entryPrice) continue;
       } else {
-        newSL = currentPrice + atr * 0.8;
-        if (newSL >= currentSL && currentSL !== 0) continue;
+        newSL = currentPrice + trailingDistanceUsd;
+        if (currentSL && newSL >= currentSL) continue;
+        if (newSL >= entryPrice) continue;
       }
 
-      console.log('🚀 TRAILING STOP UPDATE:', {
+      console.log('TRAILING STOP UPDATE:', {
         symbolId,
-        positionId: p.positionId,
+        positionId,
+        side,
         oldSL: currentSL,
         newSL
       });
 
-      await modifyStopLoss(p.positionId, newSL);
-    }
+      await modifyStopLoss(positionId, newSL);
 
+      trade.trailingUpdatedAt = now();
+      trade.lastTrailingSL = newSL;
+    }
   } catch (err) {
-    console.log('⚠️ Trailing error:', err.message);
+    console.log('Trailing error:', err.message);
   }
 }
 
@@ -1053,64 +1016,57 @@ async function smartExitAI(symbolId, targetPositions = [], trades = []) {
     if (!Array.isArray(targetPositions) || targetPositions.length === 0) return;
 
     for (const p of targetPositions) {
-      const trade = trades.find(t =>
-        Number(t.positionId) === Number(p.positionId) &&
-        !t.exitReason
-      );
+      const positionId = getPositionId(p);
+      const trade = trades.find(t => Number(t.positionId) === positionId && !t.exitReason);
 
-      if (!trade) continue;
+      if (!positionId || !trade) continue;
 
-      const atr = Number(trade.atr || 0.5);
+      const entryPrice = getPositionEntry(p);
+      const currentPrice = await getManagedCurrentPrice(symbolId, p);
+      const volume = getPositionVolume(p);
+      const side = getPositionSide(p);
+      const isBuy = side.includes('BUY');
 
-      const entryPrice = Number(
-        p.entryPrice ||
-        p.tradeData?.entryPrice ||
-        p.position?.entryPrice ||
-        0
-      );
+      if (!entryPrice || !currentPrice || !volume || !side) continue;
 
-      const currentPrice = livePrices[info.symbolId] || 0;
+      const smartExitPullbackUsd = Number(process.env.SMART_EXIT_PULLBACK_USD || 4);
 
-      if (!entryPrice || !currentPrice) continue;
+      if (!trade.peakPrice) trade.peakPrice = entryPrice;
 
-      const isBuy =
-        (p.tradeData?.tradeSide || p.tradeSide || '').toUpperCase() === 'BUY';
-
-      const profitDistance = Math.abs(currentPrice - entryPrice);
-
-      if (profitDistance < atr * 1.5) continue;
-
-      let peakPrice = Number(trade.peakPrice || entryPrice);
-
-      if (isBuy && currentPrice > peakPrice) {
+      if (isBuy && currentPrice > Number(trade.peakPrice)) {
         trade.peakPrice = currentPrice;
       }
 
-      if (!isBuy && currentPrice < peakPrice) {
+      if (!isBuy && currentPrice < Number(trade.peakPrice)) {
         trade.peakPrice = currentPrice;
       }
 
-      const pullback = Math.abs(currentPrice - trade.peakPrice);
+      const pullback = isBuy
+        ? Number(trade.peakPrice) - currentPrice
+        : currentPrice - Number(trade.peakPrice);
 
-      if (pullback >= atr) {
-        console.log('🧠 SMART EXIT TRIGGERED:', {
-          symbolId,
-          positionId: p.positionId
-        });
+      if (pullback < smartExitPullbackUsd) continue;
 
-        await closePosition(p.positionId, p.volume);
+      console.log('SMART EXIT TRIGGERED:', {
+        symbolId,
+        positionId,
+        side,
+        entryPrice,
+        currentPrice,
+        peakPrice: trade.peakPrice,
+        pullback
+      });
 
-        trade.exitReason = 'smart_exit';
-        trade.exitPrice = currentPrice;
-        trade.exitTime = now();
-      }
+      await closePosition(positionId, volume);
+
+      trade.exitReason = 'smart_exit';
+      trade.exitPrice = currentPrice;
+      trade.exitTime = now();
     }
-
   } catch (err) {
-    console.log('⚠️ Smart exit error:', err.message);
+    console.log('Smart exit error:', err.message);
   }
 }
-
 
 /* =========================
    نظام التنبيهات الذكي (Critical Alerts)
@@ -3899,14 +3855,4 @@ server.listen(PORT, () => {
   console.log(`🚀 Server running on ${PORT}`);
 });
 
-setInterval(async () => {
-  try {
-    const positions = await getOpenPositionsFromCTrader();
-    const trades = readJson('trades.json') || [];
 
-    await smartExitAI(41, positions, trades);
-
-  } catch (err) {
-    console.log('SmartExit Loop Error:', err.message);
-  }
-}, 5000);
