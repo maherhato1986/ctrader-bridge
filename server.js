@@ -1012,27 +1012,25 @@ if (!trade) {
     console.log('Break-even error:', err.message);
   }
 }
+
 async function applyTrailingStop(symbolId, targetPositions = [], trades = []) {
   try {
     if (!Array.isArray(targetPositions) || targetPositions.length === 0) return;
 
     for (const p of targetPositions) {
       const positionId = getPositionId(p);
+
       let trade = trades.find(t => Number(t.positionId) === positionId && !t.exitReason);
 
-if (!trade) {
-  trade = {
-    positionId,
-    symbolId,
-    breakEvenDone: true,
-    source: 'broker_sync_trailing'
-  };
-  trades.push(trade);
-}
-
-
-
-if (!positionId || !currentSL) continue;
+      if (!trade) {
+        trade = {
+          positionId,
+          symbolId,
+          breakEvenDone: true,
+          source: 'broker_sync_trailing'
+        };
+        trades.push(trade);
+      }
 
       const entryPrice = getPositionEntry(p);
       const currentPrice = await getManagedCurrentPrice(symbolId, p);
@@ -1040,7 +1038,16 @@ if (!positionId || !currentSL) continue;
       const side = getPositionSide(p);
       const isBuy = side.includes('BUY');
 
-      if (!entryPrice || !currentPrice || !side) continue;
+      console.log('TRAILING CHECK:', JSON.stringify({
+        symbolId,
+        positionId,
+        entryPrice,
+        currentPrice,
+        currentSL,
+        side
+      }, null, 2));
+
+      if (!positionId || !entryPrice || !currentPrice || !currentSL || !side) continue;
 
       const trailingDistanceUsd = Number(process.env.TRAILING_DISTANCE_USD || 3);
 
@@ -1048,21 +1055,23 @@ if (!positionId || !currentSL) continue;
 
       if (isBuy) {
         newSL = currentPrice - trailingDistanceUsd;
-        if (currentSL && newSL <= currentSL) continue;
+
+        if (newSL <= currentSL) continue;
         if (newSL <= entryPrice) continue;
       } else {
         newSL = currentPrice + trailingDistanceUsd;
-        if (currentSL && newSL >= currentSL) continue;
+
+        if (newSL >= currentSL) continue;
         if (newSL >= entryPrice) continue;
       }
 
-      console.log('TRAILING STOP UPDATE:', {
+      console.log('TRAILING STOP UPDATE:', JSON.stringify({
         symbolId,
         positionId,
         side,
         oldSL: currentSL,
         newSL
-      });
+      }, null, 2));
 
       await modifyStopLoss(positionId, newSL);
 
@@ -1073,6 +1082,7 @@ if (!positionId || !currentSL) continue;
     console.log('Trailing error:', err.message);
   }
 }
+
 
 async function smartExitAI(symbolId, targetPositions = [], trades = []) {
   try {
