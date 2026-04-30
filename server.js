@@ -884,14 +884,15 @@ function getPositionId(p) {
 }
 
 function getPositionEntry(p) {
-  return Number(
-    p.entryPrice ||
-    p.price ||                       // 👈 هذا المهم
-    p.tradeData?.entryPrice ||
-    p.position?.entryPrice ||
-    0
-  );
+  const price =
+    p.entryPrice ??
+    p.price ??
+    p.tradeData?.entryPrice ??
+    p.position?.entryPrice;
+
+  return Number(price || 0);
 }
+
 function getPositionVolume(p) {
   return Number(p.volume || p.tradeData?.volume || p.position?.volume || 0);
 }
