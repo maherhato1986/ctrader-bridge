@@ -871,12 +871,16 @@ function findSymbolByScanWs({ search = 'XAU', batchSize = 500, maxAssetId = 1000
 }
 
 function getPositionSide(p) {
-  return String(
-    p.tradeSide ||
-    p.tradeData?.tradeSide ||
-    p.position?.tradeSide ||
-    ''
-  ).toUpperCase();
+  const raw =
+    p.tradeSide ??
+    p.tradeData?.tradeSide ??
+    p.position?.tradeSide ??
+    '';
+
+  if (Number(raw) === 1) return 'BUY';
+  if (Number(raw) === 2) return 'SELL';
+
+  return String(raw).toUpperCase();
 }
 
 function getPositionId(p) {
