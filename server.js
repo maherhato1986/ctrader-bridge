@@ -1019,15 +1019,17 @@ async function applyTrailingStop(symbolId, targetPositions = [], trades = []) {
 
     for (const p of targetPositions) {
       const positionId = getPositionId(p);
+      if (!positionId) continue;
 
-      let trade = trades.find(t => Number(t.positionId) === positionId && !t.exitReason);
+      let trade = trades.find(t => Number(t.positionId) === Number(positionId) && !t.exitReason);
 
       if (!trade) {
         trade = {
           positionId,
           symbolId,
           breakEvenDone: true,
-          source: 'broker_sync_trailing'
+          source: 'broker_sync_trailing',
+          createdAt: now()
         };
         trades.push(trade);
       }
@@ -1038,7 +1040,7 @@ async function applyTrailingStop(symbolId, targetPositions = [], trades = []) {
       const side = getPositionSide(p);
       const isBuy = side.includes('BUY');
 
-      if (!positionId || !entryPrice || !currentPrice || !side) continue;
+      if (!entryPrice || !currentPrice || !side) continue;
 
       const profitDistance = isBuy
         ? currentPrice - entryPrice
@@ -1061,14 +1063,14 @@ async function applyTrailingStop(symbolId, targetPositions = [], trades = []) {
 
       if (profitDistance < trailingStartUsd) continue;
 
-      let newSL;
+      const newSL = isBuy
+        ? currentPrice - trailingDistanceUsd
+        : currentPrice + trailingDistanceUsd;
 
       if (isBuy) {
-        newSL = currentPrice - trailingDistanceUsd;
         if (currentSL && newSL <= currentSL) continue;
         if (newSL <= entryPrice) continue;
       } else {
-        newSL = currentPrice + trailingDistanceUsd;
         if (currentSL && newSL >= currentSL) continue;
         if (newSL >= entryPrice) continue;
       }
@@ -1077,7 +1079,7 @@ async function applyTrailingStop(symbolId, targetPositions = [], trades = []) {
         symbolId,
         positionId,
         side,
-        oldSL: currentSL,
+        oldSL: currentSL || null,
         newSL
       }, null, 2));
 
