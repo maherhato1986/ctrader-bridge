@@ -1017,11 +1017,21 @@ async function applyTrailingStop(symbolId, targetPositions = [], trades = []) {
   try {
     if (!Array.isArray(targetPositions) || targetPositions.length === 0) return;
 
+    const trailingMode = String(process.env.TRAILING_MODE || 'STATIC').toUpperCase();
+    const atrTrailingEnabled = String(process.env.ATR_TRAILING_ENABLED || 'false') === 'true';
+
+    const trailingStartUsd = Number(process.env.TRAILING_START_USD || 5);
+    const staticTrailingDistanceUsd = Number(process.env.TRAILING_DISTANCE_USD || 3);
+
+    const atrMultiplier = Number(process.env.ATR_MULTIPLIER || 1.5);
+
     for (const p of targetPositions) {
       const positionId = getPositionId(p);
       if (!positionId) continue;
 
-      let trade = trades.find(t => Number(t.positionId) === Number(positionId) && !t.exitReason);
+      let trade = trades.find(
+        t => Number(t.positionId) === Number(positionId) && !t.exitReason
+      );
 
       if (!trade) {
         trade = {
@@ -1040,28 +1050,47 @@ async function applyTrailingStop(symbolId, targetPositions = [], trades = []) {
       const side = getPositionSide(p);
       const isBuy = side.includes('BUY');
 
-      if (!entryPrice || !currentPrice || !side) continue;
+      if (!entryPrice || !currentPrice || !side) {
+        console.log('TRAILING SKIPPED - missing data:', {
+          symbolId,
+          positionId,
+          entryPrice,
+          currentPrice,
+          side
+        });
+        continue;
+      }
 
       const profitDistance = isBuy
         ? currentPrice - entryPrice
         : entryPrice - currentPrice;
 
-      const trailingStartUsd = Number(process.env.TRAILING_START_USD || 5);
-      const trailingDistanceUsd = Number(process.env.TRAILING_DISTANCE_USD || 3);
+      if (profitDistance < trailingStartUsd) {
+        console.log('TRAILING WAITING:', {
+          symbolId,
+          positionId,
+          side,
+          entryPrice,
+          currentPrice,
+          profitDistance,
+          trailingStartUsd
+        });
+        continue;
+      }
 
-      console.log('TRAILING CHECK:', JSON.stringify({
-        symbolId,
-        positionId,
-        entryPrice,
-        currentPrice,
-        currentSL,
-        side,
-        profitDistance,
-        trailingStartUsd,
-        trailingDistanceUsd
-      }, null, 2));
+      const atr = Number(trade.atr || p.atr || 0);
 
-      if (profitDistance < trailingStartUsd) continue;
+      let trailingDistanceUsd = staticTrailingDistanceUsd;
+      let activeMode = 'STATIC';
+
+      if (
+        atrTrailingEnabled &&
+        trailingMode === 'ATR' &&
+        atr > 0
+      ) {
+        trailingDistanceUsd = atr * atrMultiplier;
+        activeMode = 'ATR';
+      }
 
       const newSL = isBuy
         ? currentPrice - trailingDistanceUsd
@@ -1078,16 +1107,26 @@ async function applyTrailingStop(symbolId, targetPositions = [], trades = []) {
       console.log('TRAILING STOP UPDATE:', JSON.stringify({
         symbolId,
         positionId,
+        activeMode,
+        atr,
+        atrMultiplier,
         side,
+        entryPrice,
+        currentPrice,
         oldSL: currentSL || null,
-        newSL
+        newSL,
+        profitDistance,
+        trailingDistanceUsd
       }, null, 2));
 
       await modifyStopLoss(positionId, newSL);
 
       trade.trailingUpdatedAt = now();
       trade.lastTrailingSL = newSL;
+      trade.trailingMode = activeMode;
+      trade.trailingDistanceUsd = trailingDistanceUsd;
     }
+
   } catch (err) {
     console.log('Trailing error:', err.message);
   }
