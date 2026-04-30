@@ -3686,9 +3686,14 @@ setInterval(async () => {
 
         return Number(pSymbolId) === Number(symbolId);
       });
-
+console.log('CALLING BREAK EVEN...', {
+  symbolId,
+  positionsCount: symbolPositions.length
+});
       // Break Even
-      if (process.env.BREAK_EVEN_ENABLED === 'true') {
+      console.log('BREAK EVEN STATUS:', process.env.BREAK_EVEN_ENABLED);
+
+if (process.env.BREAK_EVEN_ENABLED === 'true') {
         await applyBreakEvenLogic(symbolId, symbolPositions, trades);
       }
 
