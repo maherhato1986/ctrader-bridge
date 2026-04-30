@@ -968,13 +968,15 @@ if (!trade) {
         ? currentPrice - entryPrice
         : entryPrice - currentPrice;
 
-      console.log('BREAK EVEN DISTANCE:', {
-        symbolId,
-        positionId,
-        side,
-        triggerUsd,
-        profitDistance
-      });
+     console.log('BREAK EVEN DISTANCE:', JSON.stringify({
+  symbolId,
+  positionId,
+  entryPrice,
+  currentPrice,
+  side,
+  profitUsd,
+  triggerUsd,
+}, null, 2));
 
       if (profitDistance < triggerUsd) continue;
 
