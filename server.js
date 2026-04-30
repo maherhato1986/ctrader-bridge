@@ -902,7 +902,7 @@ function getPositionStopLoss(p) {
 }
 
 async function getManagedCurrentPrice(symbolId, p) {
-  const price = Number(
+  let price = Number(
     livePrices[symbolId] ||
     livePrices[41] ||
     p.currentPrice ||
@@ -912,6 +912,10 @@ async function getManagedCurrentPrice(symbolId, p) {
     p.position?.price ||
     0
   );
+
+  if (price > 100000) {
+    price = price / 1000;
+  }
 
   return price;
 }
