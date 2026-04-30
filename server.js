@@ -884,9 +884,14 @@ function getPositionId(p) {
 }
 
 function getPositionEntry(p) {
-  return Number(p.entryPrice || p.tradeData?.entryPrice || p.tradeData?.openPrice || p.position?.entryPrice || 0);
+  return Number(
+    p.entryPrice ||
+    p.price ||                       // 👈 هذا المهم
+    p.tradeData?.entryPrice ||
+    p.position?.entryPrice ||
+    0
+  );
 }
-
 function getPositionVolume(p) {
   return Number(p.volume || p.tradeData?.volume || p.position?.volume || 0);
 }
