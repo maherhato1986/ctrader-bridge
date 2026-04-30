@@ -3789,7 +3789,9 @@ for (const symbolId of uniqueSymbols) {
 
   if (breakEvenEnabled) {
     console.log('CALLING BREAK EVEN...', { symbolId });
-    await applyBreakEvenLogic(symbolId, symbolPositions, trades);
+    await applyBreakEven(symbolId, targetPositions, trades);
+
+await applyTrailingStop(symbolId, targetPositions, trades);
   }
 
   // =========================
