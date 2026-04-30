@@ -1013,6 +1013,63 @@ if (!trade) {
   }
 }
 
+function getPositionVolumeUnits(p) {
+  return Number(p.volume || p.tradeData?.volume || p.position?.volume || 0);
+}
+
+function getMoneyValue(raw, moneyDigits = 2) {
+  let v = Number(raw || 0);
+  if (Math.abs(v) > 10000) v = v / Math.pow(10, moneyDigits);
+  return v;
+}
+
+function getDollarPerPriceMove(p) {
+  const volumeUnits = getPositionVolumeUnits(p);
+  const lots = volumeUnits / 10000;
+  const contractSize = Number(process.env.XAUUSD_CONTRACT_SIZE || 100);
+  return lots * contractSize;
+}
+
+function estimatePositionProfitUsd(p, entryPrice, currentPrice, isBuy) {
+  const moneyDigits = Number(p.moneyDigits || p.tradeData?.moneyDigits || 2);
+  const commission = getMoneyValue(p.commission || 0, moneyDigits);
+  const dollarPerMove = getDollarPerPriceMove(p);
+
+  const priceMove = isBuy
+    ? currentPrice - entryPrice
+    : entryPrice - currentPrice;
+
+  return (priceMove * dollarPerMove) + commission;
+}
+
+function getAdaptiveTrailingSettings(netProfitUsd) {
+  if (netProfitUsd >= 300) {
+    return { startUsd: 50, lockUsd: 120, distanceUsd: 60, mode: 'AGGRESSIVE_PROFIT_LOCK' };
+  }
+
+  if (netProfitUsd >= 150) {
+    return { startUsd: 50, lockUsd: 70, distanceUsd: 45, mode: 'STRONG_TREND' };
+  }
+
+  if (netProfitUsd >= 80) {
+    return { startUsd: 50, lockUsd: 30, distanceUsd: 35, mode: 'NORMAL_TREND' };
+  }
+
+  return {
+    startUsd: Number(process.env.TRAILING_START_USD || 50),
+    lockUsd: Number(process.env.TRAILING_LOCK_USD || 10),
+    distanceUsd: Number(process.env.TRAILING_DISTANCE_USD || 30),
+    mode: 'SAFE_START'
+  };
+}
+
+function usdToPriceDistance(usd, p) {
+  const dollarPerMove = getDollarPerPriceMove(p);
+  if (!dollarPerMove) return 0;
+  return usd / dollarPerMove;
+}
+
+
 async function applyTrailingStop(symbolId, targetPositions = [], trades = []) {
   try {
     if (!Array.isArray(targetPositions) || targetPositions.length === 0) return;
@@ -1048,7 +1105,15 @@ async function applyTrailingStop(symbolId, targetPositions = [], trades = []) {
       const currentSL = getPositionStopLoss(p);
       const side = getPositionSide(p);
       const isBuy = side.includes('BUY');
-      const netProfitUsd = getPositionNetProfit(p);
+      const netProfitUsd = estimatePositionProfitUsd(p, entryPrice, currentPrice, isBuy);
+const adaptive = getAdaptiveTrailingSettings(netProfitUsd);
+
+const trailingStartUsd = adaptive.startUsd;
+const trailingLockUsd = adaptive.lockUsd;
+const trailingDistanceUsd = adaptive.distanceUsd;
+
+const lockPriceDistance = usdToPriceDistance(trailingLockUsd, p);
+const trailPriceDistance = usdToPriceDistance(trailingDistanceUsd, p);
 
       if (!entryPrice || !currentPrice || !side) {
         console.log('TRAILING SKIPPED - missing data:', {
@@ -1085,37 +1150,17 @@ async function applyTrailingStop(symbolId, targetPositions = [], trades = []) {
         activeMode = 'ATR';
       }
 
-      let newSL;
+    let newSL;
 
-      if (isBuy) {
-        const lockSL = entryPrice + trailingLockUsd;
-        const trailSL = currentPrice - activeDistance;
-        newSL = Math.max(lockSL, trailSL);
-
-        if (currentSL && newSL <= currentSL + minMove) {
-          console.log('TRAILING SKIPPED - BUY SL not improved enough:', {
-            positionId,
-            currentSL,
-            newSL,
-            minMove
-          });
-          continue;
-        }
-      } else {
-        const lockSL = entryPrice - trailingLockUsd;
-        const trailSL = currentPrice + activeDistance;
-        newSL = Math.min(lockSL, trailSL);
-
-        if (currentSL && newSL >= currentSL - minMove) {
-          console.log('TRAILING SKIPPED - SELL SL not improved enough:', {
-            positionId,
-            currentSL,
-            newSL,
-            minMove
-          });
-          continue;
-        }
-      }
+if (isBuy) {
+  const lockSL = entryPrice + lockPriceDistance;
+  const trailSL = currentPrice - trailPriceDistance;
+  newSL = Math.max(lockSL, trailSL);
+} else {
+  const lockSL = entryPrice - lockPriceDistance;
+  const trailSL = currentPrice + trailPriceDistance;
+  newSL = Math.min(lockSL, trailSL);
+}
 
       newSL = Number(newSL.toFixed(2));
 
@@ -1130,6 +1175,13 @@ async function applyTrailingStop(symbolId, targetPositions = [], trades = []) {
         oldSL: currentSL || null,
         newSL,
         trailingStartUsd,
+        adaptiveMode: adaptive.mode,
+netProfitUsd,
+trailingStartUsd,
+trailingLockUsd,
+trailingDistanceUsd,
+lockPriceDistance,
+trailPriceDistance
         trailingLockUsd,
         activeDistance,
         atr,
