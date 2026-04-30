@@ -1070,23 +1070,76 @@ function usdToPriceDistance(usd, p) {
 }
 
 
+function getSmartTrailing(netProfitUsd) {
+
+  // 🔥 ربح عالي (نقفل أرباح)
+  if (netProfitUsd >= 100) {
+    return {
+      start: 5,
+      lock: 40,
+      distance: 20,
+      mode: 'PROFIT_LOCK'
+    };
+  }
+
+  // 🟢 ترند قوي
+  if (netProfitUsd >= 50) {
+    return {
+      start: 5,
+      lock: 20,
+      distance: 15,
+      mode: 'STRONG_TREND'
+    };
+  }
+
+  // 🔵 ترند عادي
+  if (netProfitUsd >= 20) {
+    return {
+      start: 5,
+      lock: 10,
+      distance: 10,
+      mode: 'NORMAL'
+    };
+  }
+
+  // 🟡 بداية الحركة
+  return {
+    start: Number(process.env.TRAILING_START_USD || 5),
+    lock: Number(process.env.TRAILING_LOCK_USD || 2),
+    distance: Number(process.env.TRAILING_DISTANCE_USD || 1.5),
+    mode: 'EARLY_STAGE'
+  };
+}
+
 async function applyTrailingStop(symbolId, targetPositions = [], trades = []) {
   try {
     if (!Array.isArray(targetPositions) || targetPositions.length === 0) return;
 
     const trailingMode = String(process.env.TRAILING_MODE || 'STATIC').toUpperCase();
     const atrTrailingEnabled = String(process.env.ATR_TRAILING_ENABLED || 'false') === 'true';
-
-    const trailingStartUsd = Number(process.env.TRAILING_START_USD || 20);
-    const trailingLockUsd = Number(process.env.TRAILING_LOCK_USD || 5);
-    const trailingDistanceUsd = Number(process.env.TRAILING_DISTANCE_USD || 10);
-
     const atrMultiplier = Number(process.env.ATR_MULTIPLIER || 1.5);
     const minMove = Number(process.env.TRAILING_MIN_MOVE_USD || 0.3);
 
     for (const p of targetPositions) {
       const positionId = getPositionId(p);
       if (!positionId) continue;
+
+      const entryPrice = getPositionEntry(p);
+      const currentPrice = await getManagedCurrentPrice(symbolId, p);
+      const currentSL = getPositionStopLoss(p);
+      const side = getPositionSide(p);
+      const isBuy = side.includes('BUY');
+
+      if (!entryPrice || !currentPrice || !side) {
+        console.log('TRAILING SKIPPED - missing data:', {
+          symbolId,
+          positionId,
+          entryPrice,
+          currentPrice,
+          side
+        });
+        continue;
+      }
 
       let trade = trades.find(t => Number(t.positionId) === Number(positionId) && !t.exitReason);
 
@@ -1100,31 +1153,39 @@ async function applyTrailingStop(symbolId, targetPositions = [], trades = []) {
         trades.push(trade);
       }
 
-      const entryPrice = getPositionEntry(p);
-      const currentPrice = await getManagedCurrentPrice(symbolId, p);
-      const currentSL = getPositionStopLoss(p);
-      const side = getPositionSide(p);
-      const isBuy = side.includes('BUY');
       const netProfitUsd = estimatePositionProfitUsd(p, entryPrice, currentPrice, isBuy);
-const adaptive = getAdaptiveTrailingSettings(netProfitUsd);
+      const smart = getSmartTrailing(netProfitUsd);
 
-const trailingStartUsd = adaptive.startUsd;
-const trailingLockUsd = adaptive.lockUsd;
-const trailingDistanceUsd = adaptive.distanceUsd;
+      const trailingStartUsd = Number(smart.start);
+      const trailingLockUsd = Number(smart.lock);
+      let trailingDistanceUsd = Number(smart.distance);
+      let activeMode = smart.mode || 'SMART';
 
-const lockPriceDistance = usdToPriceDistance(trailingLockUsd, p);
-const trailPriceDistance = usdToPriceDistance(trailingDistanceUsd, p);
+      const atr = Number(trade.atr || p.atr || 0);
 
-      if (!entryPrice || !currentPrice || !side) {
-        console.log('TRAILING SKIPPED - missing data:', {
-          symbolId,
-          positionId,
-          entryPrice,
-          currentPrice,
-          side
-        });
-        continue;
+      if (atrTrailingEnabled && trailingMode === 'ATR' && atr > 0) {
+        trailingDistanceUsd = atr * atrMultiplier;
+        activeMode = 'ATR';
       }
+
+      const lockPriceDistance = usdToPriceDistance(trailingLockUsd, p);
+      const trailPriceDistance = usdToPriceDistance(trailingDistanceUsd, p);
+
+      console.log('SMART TRAILING:', {
+        symbolId,
+        positionId,
+        side,
+        netProfitUsd,
+        activeMode,
+        trailingStartUsd,
+        trailingLockUsd,
+        trailingDistanceUsd,
+        lockPriceDistance,
+        trailPriceDistance,
+        entryPrice,
+        currentPrice,
+        currentSL
+      });
 
       if (netProfitUsd < trailingStartUsd) {
         console.log('TRAILING WAITING:', {
@@ -1132,35 +1193,42 @@ const trailPriceDistance = usdToPriceDistance(trailingDistanceUsd, p);
           positionId,
           side,
           netProfitUsd,
-          trailingStartUsd,
-          entryPrice,
-          currentPrice,
-          currentSL
+          trailingStartUsd
         });
         continue;
       }
 
-      const atr = Number(trade.atr || p.atr || 0);
+      let newSL;
 
-      let activeDistance = trailingDistanceUsd;
-      let activeMode = 'USD_STATIC';
+      if (isBuy) {
+        const lockSL = entryPrice + lockPriceDistance;
+        const trailSL = currentPrice - trailPriceDistance;
+        newSL = Math.max(lockSL, trailSL);
 
-      if (atrTrailingEnabled && trailingMode === 'ATR' && atr > 0) {
-        activeDistance = atr * atrMultiplier;
-        activeMode = 'ATR';
+        if (currentSL && newSL <= currentSL + minMove) {
+          console.log('TRAILING SKIPPED - BUY SL not improved enough:', {
+            positionId,
+            currentSL,
+            newSL,
+            minMove
+          });
+          continue;
+        }
+      } else {
+        const lockSL = entryPrice - lockPriceDistance;
+        const trailSL = currentPrice + trailPriceDistance;
+        newSL = Math.min(lockSL, trailSL);
+
+        if (currentSL && newSL >= currentSL - minMove) {
+          console.log('TRAILING SKIPPED - SELL SL not improved enough:', {
+            positionId,
+            currentSL,
+            newSL,
+            minMove
+          });
+          continue;
+        }
       }
-
-    let newSL;
-
-if (isBuy) {
-  const lockSL = entryPrice + lockPriceDistance;
-  const trailSL = currentPrice - trailPriceDistance;
-  newSL = Math.max(lockSL, trailSL);
-} else {
-  const lockSL = entryPrice - lockPriceDistance;
-  const trailSL = currentPrice + trailPriceDistance;
-  newSL = Math.min(lockSL, trailSL);
-}
 
       newSL = Number(newSL.toFixed(2));
 
@@ -1175,15 +1243,10 @@ if (isBuy) {
         oldSL: currentSL || null,
         newSL,
         trailingStartUsd,
-        adaptiveMode: adaptive.mode,
-netProfitUsd,
-trailingStartUsd,
-trailingLockUsd,
-trailingDistanceUsd,
-lockPriceDistance,
-trailPriceDistance
         trailingLockUsd,
-        activeDistance,
+        trailingDistanceUsd,
+        lockPriceDistance,
+        trailPriceDistance,
         atr,
         atrMultiplier
       }, null, 2));
@@ -1194,12 +1257,13 @@ trailPriceDistance
       trade.lastTrailingSL = newSL;
       trade.trailingMode = activeMode;
       trade.trailingNetProfitUsd = netProfitUsd;
-      trade.trailingDistanceUsd = activeDistance;
+      trade.trailingDistanceUsd = trailingDistanceUsd;
     }
   } catch (err) {
     console.log('Trailing error:', err.message);
   }
 }
+
 
 async function smartExitAI(symbolId, targetPositions = [], trades = []) {
   try {
