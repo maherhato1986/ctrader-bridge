@@ -3949,7 +3949,7 @@ for (const symbolId of uniqueSymbols) {
 
   if (breakEvenEnabled) {
   console.log('CALLING BREAK EVEN...', { symbolId });
-  await applyBreakEven(symbolId, targetPositions, trades);
+  await applyBreakEven(symbolId, symbolPositions, trades);
 }
 
 const trailingEnabled = process.env.TRAILING_STOP_ENABLED === 'true';
@@ -3957,7 +3957,7 @@ console.log('TRAILING STATUS:', trailingEnabled);
 
 if (trailingEnabled) {
   console.log('CALLING TRAILING...', { symbolId });
-  await applyTrailingStop(symbolId, targetPositions, trades);
+  await applyTrailingStop(symbolId, symbolPositions, trades);
 }
   
 
