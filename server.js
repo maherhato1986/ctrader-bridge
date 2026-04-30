@@ -1018,9 +1018,21 @@ async function applyTrailingStop(symbolId, targetPositions = [], trades = []) {
 
     for (const p of targetPositions) {
       const positionId = getPositionId(p);
-      const trade = trades.find(t => Number(t.positionId) === positionId && !t.exitReason);
+      let trade = trades.find(t => Number(t.positionId) === positionId && !t.exitReason);
 
-      if (!positionId || !trade || !trade.breakEvenDone) continue;
+if (!trade) {
+  trade = {
+    positionId,
+    symbolId,
+    breakEvenDone: true,
+    source: 'broker_sync_trailing'
+  };
+  trades.push(trade);
+}
+
+
+
+if (!positionId || !currentSL) continue;
 
       const entryPrice = getPositionEntry(p);
       const currentPrice = await getManagedCurrentPrice(symbolId, p);
