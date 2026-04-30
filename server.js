@@ -1038,30 +1038,38 @@ async function applyTrailingStop(symbolId, targetPositions = [], trades = []) {
       const side = getPositionSide(p);
       const isBuy = side.includes('BUY');
 
+      if (!positionId || !entryPrice || !currentPrice || !side) continue;
+
+      const profitDistance = isBuy
+        ? currentPrice - entryPrice
+        : entryPrice - currentPrice;
+
+      const trailingStartUsd = Number(process.env.TRAILING_START_USD || 5);
+      const trailingDistanceUsd = Number(process.env.TRAILING_DISTANCE_USD || 3);
+
       console.log('TRAILING CHECK:', JSON.stringify({
         symbolId,
         positionId,
         entryPrice,
         currentPrice,
         currentSL,
-        side
+        side,
+        profitDistance,
+        trailingStartUsd,
+        trailingDistanceUsd
       }, null, 2));
 
-      if (!positionId || !entryPrice || !currentPrice || !currentSL || !side) continue;
-
-      const trailingDistanceUsd = Number(process.env.TRAILING_DISTANCE_USD || 3);
+      if (profitDistance < trailingStartUsd) continue;
 
       let newSL;
 
       if (isBuy) {
         newSL = currentPrice - trailingDistanceUsd;
-
-        if (newSL <= currentSL) continue;
+        if (currentSL && newSL <= currentSL) continue;
         if (newSL <= entryPrice) continue;
       } else {
         newSL = currentPrice + trailingDistanceUsd;
-
-        if (newSL >= currentSL) continue;
+        if (currentSL && newSL >= currentSL) continue;
         if (newSL >= entryPrice) continue;
       }
 
@@ -1082,7 +1090,6 @@ async function applyTrailingStop(symbolId, targetPositions = [], trades = []) {
     console.log('Trailing error:', err.message);
   }
 }
-
 
 async function smartExitAI(symbolId, targetPositions = [], trades = []) {
   try {
