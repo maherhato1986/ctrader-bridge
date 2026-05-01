@@ -2538,6 +2538,8 @@ console.log("📊 TREND:", trend);
 
 // 🔥 APPLY FILTER
 const decision = smartDecision(signal, trend);
+    console.log('TREND RESULT:', trend);
+console.log('DECISION:', decision);
 
 if (!decision.allowed) {
   console.log("❌ TRADE BLOCKED:", decision.reason);
