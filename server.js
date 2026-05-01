@@ -576,9 +576,19 @@ function buildSignal(body) {
   };
 }
 
-function calculateAutoVolume({ equity, riskPercent, stopLossUsd }) {
-  const minVolume = Number(process.env.MIN_VOLUME_UNITS || 100);      // 0.01 lot
-  const maxVolume = Number(process.env.MAX_VOLUME_UNITS || 1000);     // 0.10 lot
+
+function getProfitMultiplier(confidence) {
+  if (confidence >= 85) return 1.5;
+  if (confidence >= 75) return 1.2;
+  if (confidence >= 60) return 1.0;
+  if (confidence >= 45) return 0.6;
+  return 0.3;
+}
+
+
+function calculateAutoVolume({ equity, riskPercent, stopLossUsd, confidence = 50 }) {
+  const minVolume = Number(process.env.MIN_VOLUME_UNITS || 100);
+  const maxVolume = Number(process.env.MAX_VOLUME_UNITS || 1000);
   const defaultVolume = Number(process.env.DEFAULT_VOLUME_UNITS || 100);
 
   const riskPct = Number(riskPercent || process.env.RISK_PER_TRADE_PERCENT || 1);
@@ -591,15 +601,20 @@ function calculateAutoVolume({ equity, riskPercent, stopLossUsd }) {
 
   const riskAmountUsd = accountEquity * (riskPct / 100);
 
-  // XAUUSD: 1 lot = 100 oz
   const lots = riskAmountUsd / (stopDistance * 100);
   let volumeUnits = Math.round(lots * 10000);
+
+  // 🔥 هنا الذكاء الحقيقي
+  const multiplier = getProfitMultiplier(confidence);
+  volumeUnits = Math.round(volumeUnits * multiplier);
 
   volumeUnits = Math.max(minVolume, volumeUnits);
   volumeUnits = Math.min(maxVolume, volumeUnits);
 
   return volumeUnits;
 }
+
+
 function validateTradeRisk(signal) {
   const stopLossUsd = Number(signal.stopLossUsd || 0);
   const takeProfitUsd = Number(signal.takeProfitUsd || 0);
@@ -2575,7 +2590,18 @@ const trend = detectTrendFromPrice(currentPrice, signal.entryPrice || currentPri
 console.log("📊 TREND:", trend);
 
 // 🔥 APPLY FILTER
+
+
 const decision = smartDecision(signal, trend);
+
+const volume = calculateAutoVolume({
+  equity,
+  riskPercent: signal.riskPercent,
+  stopLossUsd: signal.stopLossUsd,
+  confidence: decision.confidence
+});
+
+    
     console.log('TREND RESULT:', trend);
 console.log('DECISION:', decision);
 
