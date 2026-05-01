@@ -3198,10 +3198,15 @@ if (!riskCheck.ok) {
   });
 }
 
-    if (aiDecision.decision !== String(signal.action || '').toUpperCase()) {
-      console.log('⚠️ AI changed direction');
-      signal.action = aiDecision.decision.toLowerCase();
-    }
+   const aiDirection = String(aiDecision.decision || '').toUpperCase();
+
+if (
+  ['BUY', 'SELL'].includes(aiDirection) &&
+  aiDirection !== String(signal.action || '').toUpperCase()
+) {
+  console.log('⚠️ AI changed direction');
+  signal.action = aiDirection.toLowerCase();
+}
 
     logAuditEvent(req, 'Execute Trade Start', {
       symbol: signal.symbol,
