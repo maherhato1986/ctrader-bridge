@@ -4309,5 +4309,33 @@ setInterval(async () => {
   } catch (err) {
     console.log("Trailing loop error:", err.message);
   }
-}, 3000);
+
+// آخر الملف
+
+async function executeTradeOnCTrader(signal) {
+  try {
+    const side = signal.action === 'buy' ? 'BUY' : 'SELL';
+
+    const response = await axios.post(
+      'https://api.spotware.com/connect/tradingaccounts/6139088/orders',
+      {
+        symbolName: signal.symbol,
+        orderType: 'MARKET',
+        tradeSide: side,
+        volume: Number(signal.volume || 1000)
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${process.env.CTRADER_ACCESS_TOKEN}`
+        }
+      }
+    );
+
+    return response.data;
+
+  } catch (err) {
+    console.error('❌ EXECUTION ERROR:', err.response?.data || err.message);
+    throw err;
+  }
+}
 
