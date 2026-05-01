@@ -3253,11 +3253,12 @@ if (!riskCheck.ok) {
       console.log('⚠️ No volume in signal, calculating auto volume...');
 
       if (typeof calculateAutoVolume === 'function') {
-        finalVolume = calculateAutoVolume({
-          equity: accountEquity,
-          riskPercent: signal.riskPercent,
-          stopLossUsd: signal.stopLossUsd
-        });
+      finalVolume = calculateAutoVolume({
+  equity: accountEquity,
+  riskPercent: signal.riskPercent,
+  stopLossUsd: signal.stopLossUsd,
+  confidence: Number(aiDecision.confidence || 50)
+});
       } else {
         finalVolume = calculateGoldVolumeFromRisk({
           balance: accountEquity,
