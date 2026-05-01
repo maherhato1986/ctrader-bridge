@@ -1712,20 +1712,35 @@ TP: ${signal.takeProfitUsd}
   }
 }
 
-function smartDecision(signal) {
-  const hour = new Date().getHours();
+function detectTrendFromPrice(currentPrice, entryPrice) {
+  if (!currentPrice || !entryPrice) return 'UNKNOWN';
 
-  const sessionOK = hour >= 10 && hour <= 22;
+  if (currentPrice < entryPrice) return 'DOWN';
+  if (currentPrice > entryPrice) return 'UP';
 
-  const riskOK = (Number(process.env.MAX_DAILY_TRADES || 10) > 0);
+  return 'SIDEWAYS';
+}
+
+function smartDecision(signal, trend = 'UNKNOWN') {
+  const action = String(signal.action || '').toUpperCase();
+
+  if (trend === 'DOWN' && action === 'BUY') {
+    return {
+      allowed: false,
+      reason: 'BUY blocked because trend is DOWN'
+    };
+  }
+
+  if (trend === 'UP' && action === 'SELL') {
+    return {
+      allowed: false,
+      reason: 'SELL blocked because trend is UP'
+    };
+  }
 
   return {
-    allowed: sessionOK && riskOK,
-    reason: !sessionOK
-      ? 'Outside trading session'
-      : !riskOK
-      ? 'Risk limit reached'
-      : 'OK'
+    allowed: true,
+    reason: `Allowed by trend filter: ${trend}`
   };
 }
 
