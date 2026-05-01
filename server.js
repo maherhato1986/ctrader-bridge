@@ -588,14 +588,19 @@ function getProfitMultiplier(confidence) {
   return 0.3;
 }
 
-
 function calculateAutoVolume({ equity, riskPercent, stopLossUsd, confidence = 50 }) {
   const minVolume = Number(process.env.MIN_VOLUME_UNITS || 100);
   const maxVolume = Number(process.env.MAX_VOLUME_UNITS || 1000);
   const defaultVolume = Number(process.env.DEFAULT_VOLUME_UNITS || 100);
 
   const riskPct = Number(riskPercent || process.env.RISK_PER_TRADE_PERCENT || 1);
-  const stopDistance = Number(stopLossUsd || 0);
+  let stopDistance = Number(stopLossUsd || 0);
+
+// 🔥 fix minimum SL (important for XAUUSD)
+if (stopDistance < 5) {
+  console.log('⚠️ SL too small → auto fixed to 5');
+  stopDistance = 5;
+}
   const accountEquity = Number(equity || 0);
 
   if (!accountEquity || !riskPct || !stopDistance) {
@@ -604,7 +609,8 @@ function calculateAutoVolume({ equity, riskPercent, stopLossUsd, confidence = 50
 
   const riskAmountUsd = accountEquity * (riskPct / 100);
 
-  const lots = riskAmountUsd / (stopDistance * 100);
+  const GOLD_PIP_VALUE = 1; // تقدير مبدئي
+const lots = riskAmountUsd / (stopDistance * GOLD_PIP_VALUE);
   let volumeUnits = Math.round(lots * 10000);
 
   // 🔥 هنا الذكاء الحقيقي
