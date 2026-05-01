@@ -3017,7 +3017,15 @@ async function getCTraderAccountInfo() {
   });
 }
 
+function getProfitVolumeMultiplier(confidence, signal = {}) {
+  const atr = Number(signal.atr || 0);
 
+  if (confidence >= 85) return 1.5;   // فرصة قوية جدًا
+  if (confidence >= 75) return 1.2;   // فرصة قوية
+  if (confidence >= 60) return 1.0;   // عادي
+  if (confidence >= 45) return 0.6;   // ضعيف
+  return 0.3;                         // ضعيف جدًا
+}
 
 app.post('/approve', auth, async (req, res) => {
   try {
