@@ -1006,15 +1006,15 @@ function getDollarPerPriceMove(p) {
 }
 
 function estimatePositionProfitUsd(p, entryPrice, currentPrice, isBuy) {
-  const moneyDigits = Number(p.moneyDigits || p.tradeData?.moneyDigits || 2);
-  const commission = getMoneyValue(p.commission || 0, moneyDigits);
-  const dollarPerMove = getDollarPerPriceMove(p);
+  const volumeUnits = Number(p.volume || p.tradeData?.volume || p.position?.volume || 0);
+  const lots = volumeUnits / 10000;
+  const contractSize = Number(process.env.XAUUSD_CONTRACT_SIZE || 100);
 
   const priceMove = isBuy
     ? currentPrice - entryPrice
     : entryPrice - currentPrice;
 
-  return (priceMove * dollarPerMove) + commission;
+  return Number((priceMove * lots * contractSize).toFixed(2));
 }
 
 function getAdaptiveTrailingSettings(netProfitUsd) {
