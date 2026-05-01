@@ -1291,6 +1291,41 @@ async function applyPartialClose(symbolId, targetPositions = [], trades = []) {
   }
 }
 
+async function applyMaxLossPerTrade(symbolId, targetPositions = []) {
+  try {
+    if (!Array.isArray(targetPositions) || targetPositions.length === 0) return;
+
+    const maxLossUsd = Number(process.env.MAX_LOSS_PER_TRADE_USD || 100);
+
+    for (const p of targetPositions) {
+      const positionId = getPositionId(p);
+      if (!positionId) continue;
+
+      const entryPrice = getPositionEntry(p);
+      const currentPrice = await getManagedCurrentPrice(symbolId, p);
+      const side = getPositionSide(p);
+      const isBuy = side.includes('BUY');
+      const volume = getPositionVolume(p);
+
+      if (!entryPrice || !currentPrice || !side || !volume) continue;
+
+      const netProfitUsd = estimatePositionProfitUsd(p, entryPrice, currentPrice, isBuy);
+
+      if (netProfitUsd <= -Math.abs(maxLossUsd)) {
+        console.log('🛑 MAX LOSS HIT - CLOSING POSITION:', {
+          positionId,
+          netProfitUsd,
+          maxLossUsd
+        });
+
+        await closePosition(positionId, volume);
+      }
+    }
+  } catch (err) {
+    console.log('❌ Max loss error:', err.message);
+  }
+}
+
 
 async function smartExitAI(symbolId, targetPositions = [], trades = []) {
   try {
@@ -3909,7 +3944,9 @@ console.log('TRAILING STATUS:', trailingEnabled);
 
 if (trailingEnabled) {
   console.log('CALLING TRAILING...', { symbolId });
-  await applyPartialClose(symbolId, positions, trades);
+  await applyMaxLossPerTrade(symbolId, positions);
+await applyPartialClose(symbolId, positions, trades);
+await applyTrailingStop(symbolId, positions, trades);
 await applyTrailingStop(symbolId, positions, trades);
 }
   
