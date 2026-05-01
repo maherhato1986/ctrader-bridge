@@ -1119,7 +1119,7 @@ async function applyTrailingStop(symbolId, targetPositions = [], trades = []) {
     const atrTrailingEnabled = String(process.env.ATR_TRAILING_ENABLED || 'false') === 'true';
     const atrMultiplier = Number(process.env.ATR_MULTIPLIER || 1.5);
     const minMove = Number(process.env.TRAILING_MIN_MOVE_USD || 0.3);
-
+console.log("🔥 TRAILING FUNCTION RUNNING");
     for (const p of targetPositions) {
       const positionId = getPositionId(p);
       if (!positionId) continue;
