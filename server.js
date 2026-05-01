@@ -1222,6 +1222,76 @@ async function applyTrailingStop(symbolId, targetPositions = [], trades = []) {
   }
 }
 
+
+async function applyPartialClose(symbolId, targetPositions = [], trades = []) {
+  try {
+    if (!Array.isArray(targetPositions) || targetPositions.length === 0) return;
+
+    const triggerUsd = Number(process.env.PARTIAL_CLOSE_TRIGGER_USD || 300);
+    const closePercent = Number(process.env.PARTIAL_CLOSE_PERCENT || 50);
+
+    for (const p of targetPositions) {
+
+      const positionId = getPositionId(p);
+      if (!positionId) continue;
+
+      let trade = trades.find(t => Number(t.positionId) === Number(positionId) && !t.exitReason);
+
+      if (!trade) {
+        trade = {
+          positionId,
+          symbolId,
+          source: 'partial_close',
+          createdAt: now()
+        };
+        trades.push(trade);
+      }
+
+      if (trade.partialCloseDone) continue;
+
+      const entryPrice = getPositionEntry(p);
+      const currentPrice = await getManagedCurrentPrice(symbolId, p);
+      const side = getPositionSide(p);
+      const isBuy = side.includes('BUY');
+
+      const volume = getPositionVolume(p);
+
+      if (!entryPrice || !currentPrice || !side || !volume) continue;
+
+      const netProfitUsd = estimatePositionProfitUsd(p, entryPrice, currentPrice, isBuy);
+
+      console.log('PARTIAL CLOSE CHECK:', {
+        positionId,
+        netProfitUsd,
+        triggerUsd
+      });
+
+      if (netProfitUsd < triggerUsd) continue;
+
+      const closeVolume = Math.floor(volume * (closePercent / 100));
+
+      if (!closeVolume || closeVolume >= volume) {
+        console.log('❌ INVALID CLOSE VOLUME');
+        continue;
+      }
+
+      console.log('🔥 PARTIAL CLOSE EXECUTED:', {
+        positionId,
+        closeVolume
+      });
+
+      await closePosition(positionId, closeVolume);
+
+      trade.partialCloseDone = true;
+      trade.partialCloseAt = now();
+    }
+
+  } catch (err) {
+    console.log('❌ Partial close error:', err.message);
+  }
+}
+
+
 async function smartExitAI(symbolId, targetPositions = [], trades = []) {
   try {
     if (!Array.isArray(targetPositions) || targetPositions.length === 0) return;
@@ -3839,7 +3909,8 @@ console.log('TRAILING STATUS:', trailingEnabled);
 
 if (trailingEnabled) {
   console.log('CALLING TRAILING...', { symbolId });
-  await applyTrailingStop(symbolId, symbolPositions, trades);
+  await applyPartialClose(symbolId, positions, trades);
+await applyTrailingStop(symbolId, positions, trades);
 }
   
 
