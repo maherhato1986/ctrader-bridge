@@ -513,17 +513,17 @@ async function sendSignalToTelegram(signal) {
   }
 
   try {
-   const text = `
-🚀 ${title}
 
-📊 Symbol: ${data.symbol}
-📈 Action: ${data.action}
-💰 Volume: ${data.volume}
-🆔 Position ID: ${data.positionId || "-"}
-💵 Price: ${data.price || "-"}
-🎯 SL: ${data.stopLossUsd || "-"} USD
-🏆 TP: ${data.takeProfitUsd || "-"} USD
-📊 Status: ${data.status}
+    const text = `
+🚀 إشارة تداول جديدة
+
+🆔 Signal ID: ${signal.signalId || "-"}
+📊 Symbol: ${signal.symbol || "-"}
+📈 Action: ${signal.action || "-"}
+💰 Volume: ${signal.volume || "-"}
+🛑 Stop Loss: ${signal.stopLossUsd || "-"} USD
+🎯 Take Profit: ${signal.takeProfitUsd || "-"} USD
+📊 Status: ${signal.status || "pending"}
 
 ⏰ ${new Date().toLocaleString()}
 `;
@@ -4137,5 +4137,14 @@ setInterval(async () => {
 server.listen(PORT, () => {
   console.log(`🚀 Server running on ${PORT}`);
 });
+setInterval(async () => {
+  try {
+    const positions = await getOpenPositionsFromCTrader();
 
+    await applyTrailingStop(41, positions, []);
+
+  } catch (err) {
+    console.log("Trailing loop error:", err.message);
+  }
+}, 3000);
 
