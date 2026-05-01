@@ -4340,9 +4340,9 @@ async function executeTradeOnCTrader(signal) {
 
     return response.data;
 
-  } catch (err) {
-    console.error('❌ EXECUTION ERROR:', err.response?.data || err.message);
-    throw err;
-  }
+ } catch (err) {
+  console.error('❌ EXECUTION ERROR:', err.response?.data || err.message);
+  throw err;
+}
 }
 
