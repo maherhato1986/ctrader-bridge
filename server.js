@@ -1024,17 +1024,17 @@ function estimatePositionProfitUsd(p, entryPrice, currentPrice, isBuy) {
 }
 
 function getAdaptiveTrailingSettings(netProfitUsd) {
-  if (netProfitUsd >= 300) {
-    return { startUsd: 50, lockUsd: 120, distanceUsd: 60, mode: 'AGGRESSIVE_PROFIT_LOCK' };
-  }
+if (netProfitUsd >= 300) {
+  return { startUsd: 100, lockUsd: 150, distanceUsd: 80, mode: 'STRONG RUN' };
+}
 
-  if (netProfitUsd >= 150) {
-    return { startUsd: 50, lockUsd: 70, distanceUsd: 45, mode: 'STRONG_TREND' };
-  }
+if (netProfitUsd >= 150) {
+  return { startUsd: 50, lockUsd: 80, distanceUsd: 60, mode: 'TREND HOLD' };
+}
 
-  if (netProfitUsd >= 80) {
-    return { startUsd: 50, lockUsd: 30, distanceUsd: 35, mode: 'NORMAL_TREND' };
-  }
+if (netProfitUsd >= 80) {
+  return { startUsd: 30, lockUsd: 40, distanceUsd: 40, mode: 'SAFE RUN' };
+}
 
   return {
     startUsd: Number(process.env.TRAILING_START_USD || 50),
