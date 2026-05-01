@@ -3421,7 +3421,10 @@ const executedPrice =
   result?.price ||
   tradeRecord?.price ||
   "-";
+// 🔥 EXECUTE REAL TRADE
+const result = await executeTradeOnCTrader(signal);
 
+console.log('🚀 REAL TRADE RESULT:', result);
 await sendTradeAlertToTelegram('🚀 TRADE EXECUTED', {
   symbol: signal.symbol,
   action: signal.action,
