@@ -122,10 +122,10 @@ async function approveSignal(signalId) {
     `${BRIDGE_URL}/approve`,
     body,
     {
-      headers: {
-        'x-api-key': API_KEY,
-        'Content-Type': 'application/json'
-      }
+     headers: {
+  'Content-Type': 'application/json',
+  'x-api-key': process.env.API_KEY
+}
     }
   );
 
@@ -137,10 +137,10 @@ async function rejectSignal(signalId) {
     `${BRIDGE_URL}/reject`,
     { signalId },
     {
-      headers: {
-        'x-api-key': API_KEY,
-        'Content-Type': 'application/json'
-      }
+   headers: {
+  'Content-Type': 'application/json',
+  'x-api-key': process.env.API_KEY
+}
     }
   );
 
