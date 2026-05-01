@@ -975,8 +975,7 @@ if (!trade) {
       const profitDistance = isBuy
         ? currentPrice - entryPrice
         : entryPrice - currentPrice;
-      console.log("Profit:", profit);
-console.log("Trailing Start:", trailingStart);
+     
 
     console.log('BREAK EVEN DISTANCE:', JSON.stringify({
   symbolId,
