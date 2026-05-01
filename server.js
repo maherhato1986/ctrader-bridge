@@ -2528,6 +2528,27 @@ app.get('/', (req, res) => {
 app.post('/signals', auth, async (req, res) => {
   try {
     const signal = buildSignal(req.body);
+    // 🔥 TREND DETECTION
+const symbolId = 41; // XAUUSD
+
+const currentPrice = await getManagedCurrentPrice(symbolId, {});
+const trend = detectTrendFromPrice(currentPrice, signal.entryPrice || currentPrice);
+
+console.log("📊 TREND:", trend);
+
+// 🔥 APPLY FILTER
+const decision = smartDecision(signal, trend);
+
+if (!decision.allowed) {
+  console.log("❌ TRADE BLOCKED:", decision.reason);
+
+  return res.json({
+    ok: false,
+    blocked: true,
+    reason: decision.reason,
+    trend
+  });
+}
 
     pendingSignals.set(signal.signalId, signal);
 
