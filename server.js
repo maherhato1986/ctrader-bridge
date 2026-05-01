@@ -1006,7 +1006,13 @@ function getDollarPerPriceMove(p) {
 }
 
 function estimatePositionProfitUsd(p, entryPrice, currentPrice, isBuy) {
-  const volumeUnits = Number(p.volume || p.tradeData?.volume || p.position?.volume || 0);
+  const volumeUnits = Number(
+    p.volume ||
+    p.tradeData?.volume ||
+    p.position?.volume ||
+    0
+  );
+
   const lots = volumeUnits / 10000;
   const contractSize = Number(process.env.XAUUSD_CONTRACT_SIZE || 100);
 
@@ -3825,7 +3831,7 @@ for (const symbolId of uniqueSymbols) {
 
   if (breakEvenEnabled) {
   console.log('CALLING BREAK EVEN...', { symbolId });
-  await applyBreakEven(symbolId, symbolPositions, trades);
+  
 }
 
 const trailingEnabled = process.env.TRAILING_STOP_ENABLED === 'true';
