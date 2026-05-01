@@ -2578,58 +2578,51 @@ app.get('/', (req, res) => {
   res.json({ ok: true, mode: MODE });
 });
 
-app.post('/signals', auth, async (req, res) => {
+app.post('/signals', async (req, res) => {
   try {
     const signal = buildSignal(req.body);
-    // 🔥 TREND DETECTION
-const symbolId = 41; // XAUUSD
 
-const currentPrice = await getManagedCurrentPrice(symbolId, {});
-const trend = detectTrendFromPrice(currentPrice, signal.entryPrice || currentPrice);
+    const symbolId = 41;
+    const currentPrice = await getManagedCurrentPrice(symbolId, {});
+    const trend = detectTrendFromPrice(currentPrice, signal.entryPrice || currentPrice);
 
-console.log("📊 TREND:", trend);
+    const decision = smartDecision(signal, trend);
 
-// 🔥 APPLY FILTER
+    signal.trend = trend;
+    signal.confidence = decision.confidence || 0;
+    signal.aiNote = decision.reason || '';
 
+    console.log('📡 TRADINGVIEW SIGNAL:', signal);
+    console.log('🧠 SIGNAL DECISION:', decision);
 
-const decision = smartDecision(signal, trend);
+    const minConfidence = Number(process.env.MIN_TELEGRAM_CONFIDENCE || 60);
 
-const volume = calculateAutoVolume({
-  equity,
-  riskPercent: signal.riskPercent,
-  stopLossUsd: signal.stopLossUsd,
-  confidence: decision.confidence
-});
+    if (!decision.allowed || Number(decision.confidence || 0) < minConfidence) {
+      console.log('⚠️ SIGNAL IGNORED - LOW CONFIDENCE:', decision.reason);
 
-    
-    console.log('TREND RESULT:', trend);
-console.log('DECISION:', decision);
-
-if (!decision.allowed) {
-  console.log("❌ TRADE BLOCKED:", decision.reason);
-
-  return res.json({
-    ok: false,
-    blocked: true,
-    reason: decision.reason,
-    trend
-  });
-}
-
-    pendingSignals.set(signal.signalId, signal);
-
-    saveToFile('pending_signals.json', Array.from(pendingSignals.values()));
-
-    try {
-      await sendSignalToTelegram(signal);
-      console.log(`📨 Signal ${signal.signalId} sent to Telegram`);
-    } catch (tgError) {
-      console.error('❌ Telegram auto-send failed:', tgError.response?.data || tgError.message);
+      return res.json({
+        ok: false,
+        ignored: true,
+        reason: decision.reason,
+        confidence: decision.confidence || 0,
+        trend
+      });
     }
 
-    res.json({ ok: true, signal });
+    pendingSignals.set(signal.signalId, signal);
+    saveToFile('pending_signals.json', Array.from(pendingSignals.values()));
+
+    await sendSignalToTelegram(signal);
+
+    return res.json({
+      ok: true,
+      sentToTelegram: true,
+      signal
+    });
+
   } catch (error) {
-    res.status(500).json({
+    console.log('❌ /signals error:', error.message);
+    return res.status(500).json({
       ok: false,
       message: error.message
     });
