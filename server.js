@@ -4316,7 +4316,7 @@ setInterval(async () => {
   } catch (err) {
     console.log("Trailing loop error:", err.message);
   }
-
+}, 3000);
 // آخر الملف
 
 async function executeTradeOnCTrader(signal) {
