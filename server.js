@@ -4324,7 +4324,7 @@ async function executeTradeOnCTrader(signal) {
     const side = signal.action === 'buy' ? 'BUY' : 'SELL';
 
     const response = await axios.post(
-      'https://live.ctraderapi.com/connect/tradingaccounts/6139088/orders',
+      'https://api.spotware.com/connect/tradingaccounts/6139088/orders',
       {
         symbolName: signal.symbol,
         orderType: 'MARKET',
@@ -4333,8 +4333,8 @@ async function executeTradeOnCTrader(signal) {
       },
       {
         headers: {
-          Authorization: `Bearer ${process.env.CTRADER_ACCESS_TOKEN}`
-        }
+  Authorization: `Bearer ${process.env.CTRADER_ACCESS_TOKEN}`
+}
       }
     );
 
