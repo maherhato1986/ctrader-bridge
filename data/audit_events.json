@@ -43,5 +43,35 @@
     "details": {
       "email": "admin@rk-lifts.com"
     }
+  },
+  {
+    "time": "2026-05-01T10:29:14.592Z",
+    "action": "LOGIN_SUCCESS",
+    "ip": "::ffff:51.36.229.20",
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36",
+    "details": {
+      "email": "admin@rk-lifts.com"
+    }
+  },
+  {
+    "time": "2026-05-01T11:30:08.574Z",
+    "action": "Execute Trade Start",
+    "ip": "::ffff:67.205.174.166",
+    "userAgent": "axios/1.15.2",
+    "details": {
+      "symbol": "XAUUSD",
+      "action": "allow"
+    }
+  },
+  {
+    "time": "2026-05-01T11:30:10.339Z",
+    "action": "Executed Trade",
+    "ip": "::ffff:67.205.174.166",
+    "userAgent": "axios/1.15.2",
+    "details": {
+      "symbol": "XAUUSD",
+      "volume": 300,
+      "action": "allow"
+    }
   }
 ]

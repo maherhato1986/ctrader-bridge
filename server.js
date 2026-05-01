@@ -3033,7 +3033,11 @@ app.post('/approve', auth, async (req, res) => {
     console.log('📌 SIGNAL TO EXECUTE:', signal);
 
  
-    const aiDecision = await aiTradeDecision(signal);
+   const aiApprovalEnabled = process.env.AI_APPROVAL_ENABLED === 'true';
+
+const aiDecision = aiApprovalEnabled
+  ? await aiTradeDecision(signal)
+  : { decision: 'ALLOW', confidence: 100, reason: 'AI approval disabled' };
 
 
 const riskCheck = validateTradeRisk(signal);
