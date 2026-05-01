@@ -2628,12 +2628,15 @@ function smartOpportunityFilter(signal) {
 app.post('/signals', async (req, res) => {
   try {
     const signal = buildSignal(req.body);
+    signal.trend = trend;
+signal.confidence = decision.confidence || 0;
+signal.aiNote = decision.reason || '';
 
     const symbolId = 41;
     const currentPrice = await getManagedCurrentPrice(symbolId, {});
     const trend = detectTrendFromPrice(currentPrice, signal.entryPrice || currentPrice);
 
-    const decision = smartDecision(signal, trend);
+    const decision = smartOpportunityFilter(signal);
 
     signal.trend = trend;
     signal.confidence = decision.confidence || 0;
