@@ -975,6 +975,8 @@ if (!trade) {
       const profitDistance = isBuy
         ? currentPrice - entryPrice
         : entryPrice - currentPrice;
+      console.log("Profit:", profit);
+console.log("Trailing Start:", trailingStart);
 
     console.log('BREAK EVEN DISTANCE:', JSON.stringify({
   symbolId,
@@ -1113,14 +1115,20 @@ function getSmartTrailing(netProfitUsd) {
 
 async function applyTrailingStop(symbolId, targetPositions = [], trades = []) {
   try {
+    console.log("🔥 TRAILING FUNCTION RUNNING");
     if (!Array.isArray(targetPositions) || targetPositions.length === 0) return;
 
     const trailingMode = String(process.env.TRAILING_MODE || 'STATIC').toUpperCase();
     const atrTrailingEnabled = String(process.env.ATR_TRAILING_ENABLED || 'false') === 'true';
     const atrMultiplier = Number(process.env.ATR_MULTIPLIER || 1.5);
     const minMove = Number(process.env.TRAILING_MIN_MOVE_USD || 0.3);
-console.log("🔥 TRAILING FUNCTION RUNNING");
+
     for (const p of targetPositions) {
+
+      const positionId = getPositionId(p);
+
+console.log("---- TRAILING CHECK ----");
+console.log("Position:", positionId);
       const positionId = getPositionId(p);
       if (!positionId) continue;
 
@@ -1129,6 +1137,10 @@ console.log("🔥 TRAILING FUNCTION RUNNING");
       const currentSL = getPositionStopLoss(p);
       const side = getPositionSide(p);
       const isBuy = side.includes('BUY');
+      console.log("Entry:", entryPrice);
+console.log("Current:", currentPrice);
+console.log("SL:", currentSL);
+console.log("Side:", side);
 
       if (!entryPrice || !currentPrice || !side) {
         console.log('TRAILING SKIPPED - missing data:', {
