@@ -1127,7 +1127,7 @@ async function applyTrailingStop(symbolId, targetPositions = [], trades = []) {
 
       const positionId = getPositionId(p);
 
-      console.log("---- TRAILING CHECK ----");
+      console.log("TRAILING CHECK");
       console.log("Position:", positionId);
 
       if (!positionId) continue;
@@ -1219,7 +1219,7 @@ async function applyTrailingStop(symbolId, targetPositions = [], trades = []) {
       newSL = Number(newSL.toFixed(2));
 
       // 🔥 أهم Log
-      console.log(">>> TRAILING APPLIED:", positionId);
+      console.log("TRAILING APPLIED:", positionId);
 
       console.log('TRAILING UPDATE:', {
         positionId,
