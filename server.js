@@ -1184,10 +1184,10 @@ async function applyTrailingStop(symbolId, targetPositions = [], trades = []) {
         newSL = Math.min(lockSL, trailSL);
 
         // 🔥 تخفيف الفلترة
-        if (currentSL && newSL >= currentSL) {
-          console.log("❌ SELL SL not improved");
-          continue;
-        }
+       if (currentSL && newSL === currentSL) {
+  console.log("❌ Same SL, no update");
+  continue;
+}
       }
 
       newSL = Number(newSL.toFixed(2));
