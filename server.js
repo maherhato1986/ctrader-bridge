@@ -3944,9 +3944,8 @@ console.log('TRAILING STATUS:', trailingEnabled);
 
 if (trailingEnabled) {
   console.log('CALLING TRAILING...', { symbolId });
-  await applyMaxLossPerTrade(symbolId, positions);
+ await applyMaxLossPerTrade(symbolId, positions);
 await applyPartialClose(symbolId, positions, trades);
-await applyTrailingStop(symbolId, positions, trades);
 await applyTrailingStop(symbolId, positions, trades);
 }
   
