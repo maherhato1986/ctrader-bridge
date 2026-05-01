@@ -1116,6 +1116,7 @@ function getSmartTrailing(netProfitUsd) {
 async function applyTrailingStop(symbolId, targetPositions = [], trades = []) {
   try {
     console.log("🔥 TRAILING FUNCTION RUNNING");
+
     if (!Array.isArray(targetPositions) || targetPositions.length === 0) return;
 
     const trailingMode = String(process.env.TRAILING_MODE || 'STATIC').toUpperCase();
@@ -1127,9 +1128,9 @@ async function applyTrailingStop(symbolId, targetPositions = [], trades = []) {
 
       const positionId = getPositionId(p);
 
-console.log("---- TRAILING CHECK ----");
-console.log("Position:", positionId);
-      const positionId = getPositionId(p);
+      console.log("---- TRAILING CHECK ----");
+      console.log("Position:", positionId);
+
       if (!positionId) continue;
 
       const entryPrice = getPositionEntry(p);
@@ -1137,19 +1138,14 @@ console.log("Position:", positionId);
       const currentSL = getPositionStopLoss(p);
       const side = getPositionSide(p);
       const isBuy = side.includes('BUY');
+
       console.log("Entry:", entryPrice);
-console.log("Current:", currentPrice);
-console.log("SL:", currentSL);
-console.log("Side:", side);
+      console.log("Current:", currentPrice);
+      console.log("SL:", currentSL);
+      console.log("Side:", side);
 
       if (!entryPrice || !currentPrice || !side) {
-        console.log('TRAILING SKIPPED - missing data:', {
-          symbolId,
-          positionId,
-          entryPrice,
-          currentPrice,
-          side
-        });
+        console.log('❌ TRAILING SKIPPED - missing data');
         continue;
       }
 
@@ -1184,29 +1180,15 @@ console.log("Side:", side);
       const trailPriceDistance = usdToPriceDistance(trailingDistanceUsd, p);
 
       console.log('SMART TRAILING:', {
-        symbolId,
         positionId,
-        side,
         netProfitUsd,
-        activeMode,
         trailingStartUsd,
-        trailingLockUsd,
-        trailingDistanceUsd,
-        lockPriceDistance,
-        trailPriceDistance,
-        entryPrice,
-        currentPrice,
-        currentSL
+        trailingDistanceUsd
       });
 
+      // 🔥 شرط التفعيل
       if (netProfitUsd < trailingStartUsd) {
-        console.log('TRAILING WAITING:', {
-          symbolId,
-          positionId,
-          side,
-          netProfitUsd,
-          trailingStartUsd
-        });
+        console.log("❌ Trailing NOT triggered yet");
         continue;
       }
 
@@ -1217,51 +1199,35 @@ console.log("Side:", side);
         const trailSL = currentPrice - trailPriceDistance;
         newSL = Math.max(lockSL, trailSL);
 
-        if (currentSL && newSL <= currentSL + minMove) {
-          console.log('TRAILING SKIPPED - BUY SL not improved enough:', {
-            positionId,
-            currentSL,
-            newSL,
-            minMove
-          });
+        // 🔥 تخفيف الفلترة
+        if (currentSL && newSL <= currentSL) {
+          console.log("❌ BUY SL not improved");
           continue;
         }
+
       } else {
         const lockSL = entryPrice - lockPriceDistance;
         const trailSL = currentPrice + trailPriceDistance;
         newSL = Math.min(lockSL, trailSL);
 
-        if (currentSL && newSL >= currentSL - minMove) {
-          console.log('TRAILING SKIPPED - SELL SL not improved enough:', {
-            positionId,
-            currentSL,
-            newSL,
-            minMove
-          });
+        // 🔥 تخفيف الفلترة
+        if (currentSL && newSL >= currentSL) {
+          console.log("❌ SELL SL not improved");
           continue;
         }
       }
 
       newSL = Number(newSL.toFixed(2));
 
-      console.log('TRAILING STOP UPDATE:', JSON.stringify({
-        symbolId,
+      // 🔥 أهم Log
+      console.log(">>> TRAILING APPLIED:", positionId);
+
+      console.log('TRAILING UPDATE:', {
         positionId,
-        activeMode,
-        side,
-        netProfitUsd,
-        entryPrice,
-        currentPrice,
-        oldSL: currentSL || null,
+        oldSL: currentSL,
         newSL,
-        trailingStartUsd,
-        trailingLockUsd,
-        trailingDistanceUsd,
-        lockPriceDistance,
-        trailPriceDistance,
-        atr,
-        atrMultiplier
-      }, null, 2));
+        profit: netProfitUsd
+      });
 
       await modifyStopLoss(positionId, newSL);
 
@@ -1271,11 +1237,11 @@ console.log("Side:", side);
       trade.trailingNetProfitUsd = netProfitUsd;
       trade.trailingDistanceUsd = trailingDistanceUsd;
     }
+
   } catch (err) {
-    console.log('Trailing error:', err.message);
+    console.log('❌ Trailing error:', err.message);
   }
 }
-
 
 async function smartExitAI(symbolId, targetPositions = [], trades = []) {
   try {
