@@ -1721,26 +1721,64 @@ function detectTrendFromPrice(currentPrice, entryPrice) {
   return 'SIDEWAYS';
 }
 
-function smartDecision(signal, trend = 'UNKNOWN') {
+function calculateSmartConfidence(signal, trend) {
+  let confidence = 50;
+  let reason = [];
+
   const action = String(signal.action || '').toUpperCase();
 
+  // توافق الاتجاه
+  if (trend === 'UP' && action === 'BUY') {
+    confidence += 25;
+    reason.push("Trend supports BUY");
+  }
+
+  if (trend === 'DOWN' && action === 'SELL') {
+    confidence += 25;
+    reason.push("Trend supports SELL");
+  }
+
+  // عكس الاتجاه
   if (trend === 'DOWN' && action === 'BUY') {
-    return {
-      allowed: false,
-      reason: 'BUY blocked because trend is DOWN'
-    };
+    confidence -= 30;
+    reason.push("Against trend");
   }
 
   if (trend === 'UP' && action === 'SELL') {
+    confidence -= 30;
+    reason.push("Against trend");
+  }
+
+  // ATR (إذا موجود)
+  if (signal.atr && signal.atr > 10) {
+    confidence += 10;
+    reason.push("Strong volatility");
+  }
+
+  return {
+    confidence: Math.max(0, Math.min(100, confidence)),
+    reason: reason.join(" | ")
+  };
+}
+
+function smartDecision(signal, trend = 'UNKNOWN') {
+  const action = String(signal.action || '').toUpperCase();
+
+  const ai = calculateSmartConfidence(signal, trend);
+
+  console.log("🧠 AI CONFIDENCE:", ai);
+
+  if (ai.confidence < 40) {
     return {
       allowed: false,
-      reason: 'SELL blocked because trend is UP'
+      reason: `Low confidence (${ai.confidence})`
     };
   }
 
   return {
     allowed: true,
-    reason: `Allowed by trend filter: ${trend}`
+    reason: `Approved (${ai.confidence}) - ${ai.reason}`,
+    confidence: ai.confidence
   };
 }
 
