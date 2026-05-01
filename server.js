@@ -559,21 +559,24 @@ function buildSignal(body) {
       : null;
 
   return {
-    signalId: body.signalId || `sig-${Date.now()}`,
-    symbol: String(body.symbol || '').toUpperCase().trim(),
-    action: String(body.action || '').toLowerCase().trim(),
-    volume: parsedVolume,
+  signalId: body.signalId || `sig-${Date.now()}`,
+  symbol: String(body.symbol || '').toUpperCase().trim(),
+  action: String(body.action || '').toLowerCase().trim(),
+  volume: parsedVolume,
 
-    stopLossUsd: body.stopLossUsd !== undefined ? Number(body.stopLossUsd) : null,
-    takeProfitUsd: body.takeProfitUsd !== undefined ? Number(body.takeProfitUsd) : null,
-    riskPercent: body.riskPercent !== undefined ? Number(body.riskPercent) : null,
+  stopLossUsd: body.stopLossUsd !== undefined ? Number(body.stopLossUsd) : null,
+  takeProfitUsd: body.takeProfitUsd !== undefined ? Number(body.takeProfitUsd) : null,
+  riskPercent: body.riskPercent !== undefined ? Number(body.riskPercent) : null,
 
-    // 🔥 الجديد
-    atr: body.atr !== undefined ? Number(body.atr) : null,
+  atr: body.atr !== undefined ? Number(body.atr) : null,
 
-    status: 'pending',
-    createdAt: now()
-  };
+  emaFast: body.emaFast !== undefined ? Number(body.emaFast) : null,
+  emaSlow: body.emaSlow !== undefined ? Number(body.emaSlow) : null,
+  rsi: body.rsi !== undefined ? Number(body.rsi) : null,
+
+  status: 'pending',
+  createdAt: now()
+};
 }
 
 
@@ -2577,6 +2580,50 @@ app.post('/api/verify-code', (req, res) => {
 app.get('/', (req, res) => {
   res.json({ ok: true, mode: MODE });
 });
+
+function smartOpportunityFilter(signal) {
+  let confidence = 50;
+  const reasons = [];
+
+  const action = String(signal.action || '').toUpperCase();
+  const rsi = Number(signal.rsi || 50);
+  const emaFast = Number(signal.emaFast || 0);
+  const emaSlow = Number(signal.emaSlow || 0);
+  const atr = Number(signal.atr || 0);
+
+  if (action === 'BUY' && emaFast > emaSlow) {
+    confidence += 25;
+    reasons.push('EMA trend supports BUY');
+  }
+
+  if (action === 'SELL' && emaFast < emaSlow) {
+    confidence += 25;
+    reasons.push('EMA trend supports SELL');
+  }
+
+  if (action === 'BUY' && rsi > 70) {
+    confidence -= 20;
+    reasons.push('RSI overbought');
+  }
+
+  if (action === 'SELL' && rsi < 30) {
+    confidence -= 20;
+    reasons.push('RSI oversold');
+  }
+
+  if (atr >= 8) {
+    confidence += 10;
+    reasons.push('Good volatility');
+  }
+
+  confidence = Math.max(0, Math.min(100, confidence));
+
+  return {
+    allowed: confidence >= Number(process.env.MIN_TELEGRAM_CONFIDENCE || 75),
+    confidence,
+    reason: reasons.join(' | ') || 'Neutral market'
+  };
+}
 
 app.post('/signals', async (req, res) => {
   try {
