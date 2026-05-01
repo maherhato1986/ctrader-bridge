@@ -3,9 +3,7 @@
 
 require('dotenv').config();
 
-// =========================
-// IMPORTS
-// =========================
+
 const express = require('express');
 const WebSocket = require('ws');
 const fs = require('fs');
@@ -22,9 +20,7 @@ function now() {
 const cookieParser = require('cookie-parser');
 const { Resend } = require('resend');
 
-// =========================
-// APP INIT (مهم جداً يكون هنا)
-// =========================
+
 const app = express();
 
 const server = require('http').createServer(app);
@@ -48,14 +44,10 @@ app.get('/test', (req, res) => {
   res.send('SERVER WORKING');
 });
 
-// =========================
-// SERVICES
-// =========================
+
 const resend = new Resend(process.env.RESEND_API_KEY);
 
-// =========================
-// MIDDLEWARES (بعد تعريف app)
-// =========================
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true })); // 👈 هذا المهم
 app.use(cookieParser());
@@ -68,9 +60,9 @@ app.get('/login', (req, res) => {
 
 
 
-// =========================
-// FILES
-// =========================
+
+
+
 const OTP_FILE = 'data/otp_sessions.json';
 const AUDIT_FILE = 'data/login_audit.json';
 const SESSION_FILE = 'data/dashboard_sessions.json';
@@ -165,9 +157,6 @@ ${info.time}
 
 
 
-/* =========================
-   CONFIG
-========================= */
 const PORT = Number(process.env.PORT || 3000);
 const API_KEY = process.env.API_KEY || 'maher123';
 function auth(req, res, next) {
@@ -182,9 +171,7 @@ function auth(req, res, next) {
 
 const MODE = String(process.env.MODE || 'SIMULATION').toUpperCase();
 
-/* =========================
-   CTRADER CONFIG
-========================= */
+
 const CTRADER_CLIENT_ID = process.env.CTRADER_CLIENT_ID || '';
 const CTRADER_CLIENT_SECRET = process.env.CTRADER_CLIENT_SECRET || '';
 const CTRADER_ACCESS_TOKEN = process.env.CTRADER_ACCESS_TOKEN || '';
@@ -220,9 +207,6 @@ const TRADE_MANAGER = {
 
 
 
-/* =========================
-   PAYLOAD TYPES (نظيفة)
-========================= */
 const PT = {
   APP_AUTH_REQ: 2100,
   APP_AUTH_RES: 2101,
@@ -253,9 +237,7 @@ CLOSE_POSITION_REQ: Number(process.env.PT_CLOSE_POSITION_REQ || 2111),
 let livePrices = {};
 let priceWs = null;
 
-/* =========================
-   STATE
-========================= */
+
 let livePositionsCache = [];
 let lastPositionsUpdateAt = null;
 let cTraderMainWs = null;
@@ -322,9 +304,7 @@ function extractPositionInfo(p) {
     )
   };
 }
-/* =========================
-   HELPERS
-========================= */
+
 
 function startLivePriceStream() {
   if (priceWs) {
@@ -405,9 +385,7 @@ function startLivePriceStream() {
   });
 }
 
-/* =========================
-   STORAGE (بسيط)
-========================= */
+
 function saveToFile(file, data) {
   fs.writeFileSync(file, JSON.stringify(data, null, 2));
 }
@@ -570,9 +548,7 @@ async function sendTradeAlertToTelegram(title, data = {}) {
     console.log('❌ Telegram trade alert failed:', err.response?.data || err.message);
   }
 }
-/* =========================
-   SIGNAL BUILDER
-========================= */
+
 function buildSignal(body) {
   const parsedVolume =
     body.volume !== undefined &&
@@ -646,9 +622,7 @@ function validateTradeRisk(signal) {
 
   return { ok: true };
 }
-/* =========================
-   WS REQUEST
-========================= */
+
 function wsRequest(handler) {
   return new Promise((resolve, reject) => {
     const ws = new WebSocket(CTRADER_WS_URL);
@@ -1299,9 +1273,7 @@ async function smartExitAI(symbolId, targetPositions = [], trades = []) {
   }
 }
 
-/* =========================
-   نظام التنبيهات الذكي (Critical Alerts)
-========================= */
+
 
 async function sendCriticalAlert(message) {
     console.error(`🚨 ALERT: ${message}`);
@@ -1678,13 +1650,8 @@ function calculateGoldVolumeFromRisk({
   return normalizeVolumeUnits(rawUnits);
 }
 
-/* =========================
-   GET ACCOUNT SNAPSHOT
-========================= */
 
-// =========================
-// GET ACCOUNT (بسيط)
-// =========================
+
 async function getAccount() {
   return wsRequest((ws) => {
     ws.send(JSON.stringify({
@@ -1773,10 +1740,6 @@ async function closePosition(positionId, volume) {
 }
 
 
-
-// =========================
-// GET OPEN POSITIONS (محسّن)
-// =========================
 async function getOpenPositionsFromCTrader() {
   if (MODE !== 'LIVE') {
     console.log('⚠️ Using simulation mode (no positions)');
@@ -1832,9 +1795,7 @@ async function getOpenPositionsFromCTrader() {
       try {
         const msg = JSON.parse(raw.toString());
 
-        // =========================
-        // STEP 1: APP AUTH
-        // =========================
+      
         if (msg.payloadType === PT.APP_AUTH_RES) {
           console.log('🔐 ACCOUNT AUTH...');
           ws.send(JSON.stringify({
@@ -1848,9 +1809,7 @@ async function getOpenPositionsFromCTrader() {
           return;
         }
 
-        // =========================
-        // STEP 2: ACCOUNT AUTH
-        // =========================
+     
         if (msg.payloadType === PT.ACCOUNT_AUTH_RES) {
           console.log('📡 RECONCILE REQUEST...');
           ws.send(JSON.stringify({
@@ -1863,9 +1822,7 @@ async function getOpenPositionsFromCTrader() {
           return;
         }
 
-        // =========================
-        // STEP 3: RECEIVE POSITIONS
-        // =========================
+     
         if (msg.payloadType === PT.RECONCILE_RES) {
 
           const positionsRaw =
@@ -1882,9 +1839,7 @@ async function getOpenPositionsFromCTrader() {
           return finish(positions);
         }
 
-        // =========================
-        // ERROR HANDLING
-        // =========================
+     
         if (msg.payload?.errorCode) {
           return fail(
             new Error(`${msg.payload.errorCode}: ${msg.payload.description || ''}`)
@@ -2023,9 +1978,7 @@ const minProfit = Number(process.env.MIN_PROFIT_TO_ADD_USD || 5);
   }
 }
 
-/* =========================
-   EXECUTE ORDER
-========================= */
+
 async function executeOrder({ symbolId, side, volume }) {
   if (MODE !== 'LIVE') {
     return { simulated: true };
@@ -2215,7 +2168,7 @@ function normalizeMoney(value, digits = 2) {
   return n;
 }
 
-// ================= RISK ENGINE =================
+
 
 function canOpenNewTrade(currentFloatingPnL) {
   const maxLoss = Number(process.env.MAX_DAILY_LOSS || 500);
@@ -2235,9 +2188,6 @@ function preventDuplicateTrades(positions, symbol) {
 }
 
 
-/* =========================
-   ROUTES
-========================= */
 
 app.get('/api/dashboard', auth, async (req, res) => {
   try {
@@ -2671,9 +2621,7 @@ function isNewsBlackoutNow() {
   return { blocked: false, reason: 'No high impact news now' };
 }
 
-// =========================
-// TradingView Webhook
-// =========================
+
 
 app.post('/webhook/tradingview', async (req, res) => {
   try {
@@ -2935,14 +2883,10 @@ app.post('/approve', auth, async (req, res) => {
 
     console.log('📌 SIGNAL TO EXECUTE:', signal);
 
-    // =========================
-    // AI DECISION
-    // =========================
+ 
     const aiDecision = await aiTradeDecision(signal);
 
-    // ================================
-// RISK MANAGER CHECK
-// ================================
+
 const riskCheck = validateTradeRisk(signal);
 
 if (!riskCheck.ok) {
@@ -3001,9 +2945,7 @@ if (!riskCheck.ok) {
       action: signal.action
     });
 
-    // =========================
-    // EXECUTION COOLDOWN
-    // =========================
+
     const nowTime = Date.now();
     const EXECUTION_COOLDOWN = Number(process.env.EXECUTION_COOLDOWN || 15000);
 
@@ -3016,9 +2958,7 @@ if (!riskCheck.ok) {
 
     lastExecutionTime = nowTime;
 
-    // =========================
-    // SYMBOL RESOLUTION
-    // =========================
+
     let finalSymbolId = Number(symbolId || 0);
     let resolvedSymbol = null;
 
@@ -3029,9 +2969,6 @@ if (!riskCheck.ok) {
       console.log('✅ Resolved symbolId:', finalSymbolId);
     }
 
-    // =========================
-    // ACCOUNT + RISK DATA
-    // =========================
     const accountInfo = await getCTraderAccountInfo();
     const accountEquity = Number(
       accountInfo.equity ||
@@ -3070,9 +3007,7 @@ if (!riskCheck.ok) {
       });
     }
 
-    // =========================
-    // PREVENT DUPLICATE SYMBOL
-    // =========================
+
     const sameSymbolPositions = openPositions.filter(p => {
       const info = extractPositionInfo(p);
       return Number(info.symbolId) === Number(finalSymbolId);
@@ -3086,9 +3021,7 @@ if (!riskCheck.ok) {
       });
     }
 
-    // =========================
-    // VOLUME / AUTO LOT
-    // =========================
+
     let finalVolume = Number(signal.volume || 0);
 
     if (!finalVolume) {
@@ -3130,9 +3063,7 @@ if (!riskCheck.ok) {
     console.log('📉 FLOATING PNL:', currentFloatingPnL);
     console.log('📏 FINAL SAFE VOLUME:', finalVolume);
 
-    // =========================
-    // EXECUTE TRADE
-    // =========================
+
     console.log('🚀 EXECUTING REAL TRADE...');
     console.log({
       mode: MODE,
@@ -3676,9 +3607,6 @@ app.post('/auth/verify-code', (req, res) => {
   }
 });
 
-// =========================
-// DASHBOARD API
-// =========================
 
 app.get('/api/dashboard', auth, async (req, res) => {
   try {
@@ -3781,14 +3709,6 @@ app.get('/pending', auth, (req, res) => {
 
 
 
-// =========================
-// GLOBAL BREAK EVEN ENGINE
-// =========================
-
-/* =========================
-   CORE ENGINE: SYNC & MANAGEMENT
-   ========================= */
-
 // 1. دالة المطابقة الفرعية (ضعها خارج الـ setInterval أو فوقه)
 function syncTradesWithBroker(positions, trades) {
   // استخراج الـ IDs الحقيقية الموجودة في منصة cTrader حالياً
@@ -3823,21 +3743,14 @@ function syncTradesWithBroker(positions, trades) {
 }
 
 
-// =========================
-// CORE ENGINE: SYNC & MANAGEMENT
-// =========================
 
 // 2. المحرك الرئيسي الآمن
 setInterval(async () => {
   try {
-    // =========================
-    // STEP 0: قراءة الصفقات المفتوحة
-    // =========================
+
     const positions = await getOpenPositionsFromCTrader();
 
-    // =========================
-    // STEP 1: قراءة trades.json
-    // =========================
+
     let trades = [];
     if (fs.existsSync('trades.json')) {
       const raw = fs.readFileSync('trades.json', 'utf8');
@@ -3845,9 +3758,7 @@ setInterval(async () => {
       trades = Array.isArray(trades) ? trades : [trades];
     }
 
-    // =========================
-    // STEP 2: مزامنة trades.json مع cTrader
-    // =========================
+
 
     // إذا لا توجد صفقات مفتوحة في cTrader
     if (!positions || positions.length === 0) {
@@ -3869,23 +3780,16 @@ setInterval(async () => {
       }
     }
 
-    // =========================
-    // STEP 3: تحديث الكاش
-    // =========================
+
     livePositionsCache = positions;
     lastPositionsUpdateAt = now();
 
-    // =========================
-    // STEP 4: حماية الإدارة التلقائية
-    // =========================
+
     if (process.env.AUTO_MANAGEMENT_ENABLED !== 'true') {
       console.log('🟡 Auto management disabled. Sync only.');
       return;
     }
 
-    // =========================
-    // STEP 5: تجميع الرموز المفتوحة
-    // =========================
     const uniqueSymbols = new Set();
 
     for (const p of positions) {
@@ -3897,9 +3801,6 @@ setInterval(async () => {
       if (symbolId) uniqueSymbols.add(Number(symbolId));
     }
 
-    // =========================
-    // STEP 6: إدارة الصفقات الذكية
-    // =========================
 for (const symbolId of uniqueSymbols) {
 
   const symbolPositions = positions.filter(p => {
@@ -3917,9 +3818,7 @@ for (const symbolId of uniqueSymbols) {
     positionsCount: symbolPositions.length
   });
 
-  // =========================
-  // 🔸 Break Even
-  // =========================
+
   const breakEvenEnabled = process.env.BREAK_EVEN_ENABLED === 'true';
 
   console.log('BREAK EVEN STATUS:', breakEvenEnabled);
@@ -3938,9 +3837,6 @@ if (trailingEnabled) {
 }
   
 
-  // =========================
-  // 🔸 Smart Exit AI
-  // =========================
   const smartExitEnabled = process.env.SMART_EXIT_ENABLED === 'true';
 
   console.log('SMART EXIT STATUS:', smartExitEnabled);
@@ -3951,9 +3847,6 @@ if (trailingEnabled) {
   }
 }
 
-    // =========================
-    // STEP 7: حفظ التحديثات
-    // =========================
     saveToFile('trades.json', trades);
 
   } catch (err) {
@@ -3961,9 +3854,7 @@ if (trailingEnabled) {
   }
 }, 20000); // يعمل كل 20 ثانية
 
-/* =========================
-   AUTO TOKEN REFRESH LOGIC
-========================= */
+
 
 
 
@@ -4129,9 +4020,7 @@ setInterval(async () => {
   }
 }, 1000);
 
-/* =========================
-   START
-========================= */
+
 
 
 server.listen(PORT, () => {
