@@ -404,6 +404,33 @@ function readArrayFile(file) {
   }
 }
 
+function canAddAggressivePosition({ openPositions, signal, lastPyramidTime }) {
+  const maxPositions = Number(process.env.MAX_POSITIONS_PER_SYMBOL || 3);
+  const triggerProfit = Number(process.env.PYRAMID_PROFIT_TRIGGER_USD || 10);
+  const cooldown = Number(process.env.PYRAMID_COOLDOWN_MS || 60000);
+
+  const sameSymbol = openPositions.filter(p =>
+    Number(p.tradeData?.symbolId || p.symbolId) === 41
+  );
+
+  if (sameSymbol.length >= maxPositions) {
+    return { allow: false, reason: 'Max pyramid positions reached' };
+  }
+
+  const now = Date.now();
+  if (lastPyramidTime && now - lastPyramidTime < cooldown) {
+    return { allow: false, reason: 'Pyramid cooldown active' };
+  }
+
+  const winning = sameSymbol.some(p => Number(p.netProfit || p.profit || 0) >= triggerProfit);
+
+  if (!winning) {
+    return { allow: false, reason: 'No winning protected position yet' };
+  }
+
+  return { allow: true };
+}
+
 function removePendingSignal(signalId) {
   pendingSignals.delete(signalId);
 
@@ -3287,13 +3314,31 @@ if (
       return Number(info.symbolId) === Number(finalSymbolId);
     });
 
-    if (sameSymbolPositions.length > 0) {
-      return res.status(409).json({
+   if (openPositions.length > 0) {
+  if (process.env.TRADING_MODE === 'AGGRESSIVE' && process.env.ALLOW_PYRAMIDING === 'true') {
+    const pyramidCheck = canAddAggressivePosition({
+      openPositions,
+      signal,
+      lastPyramidTime
+    });
+
+    if (!pyramidCheck.allow) {
+      return res.json({
         ok: false,
-        message: 'Blocked: position already open on this symbol',
-        symbolId: finalSymbolId
+        ignored: true,
+        reason: pyramidCheck.reason
       });
     }
+
+    signal.isPyramid = true;
+    signal.volume = Math.round(Number(signal.volume || 1000) * Number(process.env.PYRAMID_VOLUME_MULTIPLIER || 0.7));
+  } else {
+    return res.json({
+      ok: false,
+      reason: 'Blocked: position already open on this symbol'
+    });
+  }
+}
 
 
     let finalVolume = Number(signal.volume || 0);
