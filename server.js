@@ -3522,8 +3522,7 @@ const executedPrice =
   result?.price ||
   tradeRecord?.price ||
   "-";
-// 🔥 EXECUTE REAL TRADE
-const executionResult = await executeTradeOnCTrader(signal);
+
 
 
 console.log('🚀 REAL TRADE RESULT:', result);
@@ -3531,8 +3530,8 @@ await sendTradeAlertToTelegram('🚀 TRADE EXECUTED', {
   symbol: signal.symbol,
   action: signal.action,
   volume: finalVolume,
-  positionId: executionResult?.positionId || executedPositionId,
-price: executionResult?.price || executedPrice,
+ positionId: executedPositionId,
+price: executedPrice,
   status: 'EXECUTED'
 });
 
@@ -3541,7 +3540,7 @@ price: executionResult?.price || executedPrice,
       symbolId: finalSymbolId,
       resolvedSymbol,
       volume: finalVolume,
-      result: executionResult
+      result
     });
 
   } catch (error) {
