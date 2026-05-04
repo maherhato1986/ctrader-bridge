@@ -3124,6 +3124,67 @@ function getProfitVolumeMultiplier(confidence, signal = {}) {
   return 0.3;                         // ضعيف جدًا
 }
 
+function smartTradingEngine(signal, aiDecision = {}) {
+  const action = String(signal.action || '').toLowerCase();
+
+  let confidence = Number(aiDecision.confidence || 50);
+  let trend = 'SIDEWAYS';
+
+  const emaFast = Number(signal.emaFast || 0);
+  const emaSlow = Number(signal.emaSlow || 0);
+  const rsi = Number(signal.rsi || 50);
+
+  if (emaFast && emaSlow) {
+    if (emaFast > emaSlow) trend = 'BULLISH';
+    if (emaFast < emaSlow) trend = 'BEARISH';
+  }
+
+  if (action === 'buy' && trend === 'BULLISH') confidence += 20;
+  if (action === 'sell' && trend === 'BEARISH') confidence += 20;
+
+  if (action === 'buy' && trend === 'BEARISH') confidence -= 20;
+  if (action === 'sell' && trend === 'BULLISH') confidence -= 20;
+
+  if (rsi > 70 && action === 'buy') confidence -= 10;
+  if (rsi < 30 && action === 'sell') confidence -= 10;
+
+  confidence = Math.max(0, Math.min(100, confidence));
+
+  let volumeMultiplier = 1;
+  let riskLevel = 'NORMAL';
+
+  if (confidence >= 80) {
+    volumeMultiplier = 1;
+    riskLevel = 'STRONG';
+  } else if (confidence >= 60) {
+    volumeMultiplier = 0.75;
+    riskLevel = 'NORMAL';
+  } else if (confidence >= 40) {
+    volumeMultiplier = 0.4;
+    riskLevel = 'LOW';
+  } else {
+    volumeMultiplier = 0.25;
+    riskLevel = 'MICRO';
+  }
+
+  signal.stopLossUsd = Math.max(5, Number(signal.stopLossUsd || 10));
+
+  if (!signal.takeProfitUsd || Number(signal.takeProfitUsd) < 10) {
+    signal.takeProfitUsd = signal.stopLossUsd * 2;
+  }
+
+  return {
+    allowed: true,
+    decision: 'ALLOW_WITH_SMART_RISK',
+    trend,
+    confidence,
+    volumeMultiplier,
+    riskLevel,
+    reason: `Smart Engine allowed trade with adjusted risk. Confidence ${confidence}%.`
+  };
+}
+
+
 app.post('/approve', auth, async (req, res) => {
   try {
     const { signalId, symbolId } = req.body;
@@ -3205,31 +3266,12 @@ if (!riskCheck.ok) {
 
     console.log('🤖 AI DECISION:', aiDecision);
 
-  if (
-  aiDecision.decision === 'REJECT' &&
-  Number(aiDecision.confidence || 0) < 40
-) {
-  const blockedSignal = markSignalBlocked(
-    signal,
-    'AI blocked trade',
-    aiDecision
-  );
+ const smartDecision = smartTradingEngine(signal, aiDecision);
 
-  await sendTradeAlertToTelegram('🚫 TRADE BLOCKED BY AI', {
-    symbol: signal.symbol,
-    action: signal.action,
-    volume: signal.volume || '-',
-    status: `BLOCKED | Confidence: ${aiDecision.confidence || 0}`
-  });
+console.log('🧠 SMART ENGINE DECISION:', smartDecision);
 
-  return res.status(403).json({
-    ok: false,
-    message: 'AI blocked trade',
-    status: 'blocked',
-    signal: blockedSignal,
-    aiDecision
-  });
-}
+signal.aiDecision = aiDecision;
+signal.smartDecision = smartDecision;
 
    const aiDirection = String(aiDecision.decision || '').toUpperCase();
 
@@ -3363,6 +3405,14 @@ if (
     }
 
     finalVolume = Number(finalVolume);
+
+    if (signal.smartDecision?.volumeMultiplier) {
+  finalVolume = Math.round(finalVolume * signal.smartDecision.volumeMultiplier);
+  console.log('🧠 SMART ENGINE VOLUME ADJUSTED:', {
+    multiplier: signal.smartDecision.volumeMultiplier,
+    finalVolume
+  });
+}
 
     // إذا القيمة Lot مثل 0.01 أو 0.10 نحولها units
     if (finalVolume > 0 && finalVolume < 10) {
