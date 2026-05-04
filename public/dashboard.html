@@ -129,7 +129,7 @@ th{color:#9fb2c8;font-weight:700}
       <table>
         <thead>
           <tr>
-            <th>Signal ID</th><th>Symbol</th><th>Side</th><th>Risk</th><th>Action</th>
+           <th>Signal ID</th><th>Symbol</th><th>Side</th><th>Confidence</th><th>Trend</th><th>Risk</th><th>Action</th>
           </tr>
         </thead>
         <tbody id="signalsBody"></tbody>
@@ -444,7 +444,7 @@ function renderPositions(positions){
 function renderSignals(signals){
   const body = document.getElementById("signalsBody");
   if(!signals.length){
-    body.innerHTML = `<tr><td colspan="5">No pending signals</td></tr>`;
+   body.innerHTML = `<tr><td colspan="7">No pending signals</td></tr>`;
     return;
   }
 
@@ -453,8 +453,10 @@ function renderSignals(signals){
       <td>${s.signalId}</td>
       <td>${s.symbol}</td>
       <td><span class="tag ${s.action === 'sell' ? 'sell' : 'buy'}">${s.action}</span></td>
-      <td>${s.riskPercent ?? "-"}</td>
-      <td>
+      <td class="${Number(s.confidence || 0) >= 70 ? 'green' : 'yellow'}">${s.confidence ?? "-"}%</td>
+<td>${s.trend || "-"}</td>
+<td>${s.riskLevel || s.riskPercent || "-"}</td>
+<td>
         <button class="btn approve" onclick="approve('${s.signalId}')">✓</button>
         <button class="btn reject" onclick="rejectSignal('${s.signalId}')">×</button>
       </td>
