@@ -4196,19 +4196,24 @@ for (const symbolId of uniqueSymbols) {
 
   console.log('BREAK EVEN STATUS:', breakEvenEnabled);
 
-  if (breakEvenEnabled) {
+if (breakEvenEnabled) {
   console.log('CALLING BREAK EVEN...', { symbolId });
-  
+  await applyBreakEvenLogic(symbolId, symbolPositions, trades);
+  saveToFile('trades.json', trades);
 }
 
 const trailingEnabled = process.env.TRAILING_STOP_ENABLED === 'true';
 console.log('TRAILING STATUS:', trailingEnabled);
 
 if (trailingEnabled) {
-  console.log('CALLING TRAILING...', { symbolId });
- await applyMaxLossPerTrade(symbolId, positions);
-await applyPartialClose(symbolId, positions, trades);
-await applyTrailingStop(symbolId, positions, trades);
+  console.log('CALLING SMART TRADE MANAGEMENT...', { symbolId });
+
+  await applyMaxLossPerTrade(symbolId, symbolPositions);
+  await applyPartialClose(symbolId, symbolPositions, trades);
+  await applyTrailingStop(symbolId, symbolPositions, trades);
+  await smartExitAI(symbolId, symbolPositions, trades);
+
+  saveToFile('trades.json', trades);
 }
   
 
