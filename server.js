@@ -2624,23 +2624,40 @@ function smartOpportunityFilter(signal) {
   const emaSlow = Number(signal.emaSlow || 0);
   const atr = Number(signal.atr || 0);
 
-  if (action === 'BUY' && emaFast > emaSlow) {
-    confidence += 25;
-    reasons.push('EMA trend supports BUY');
+  let trend = 'SIDEWAYS';
+
+  if (emaFast && emaSlow) {
+    if (emaFast > emaSlow) trend = 'BULLISH';
+    if (emaFast < emaSlow) trend = 'BEARISH';
   }
 
-  if (action === 'SELL' && emaFast < emaSlow) {
+  if (action === 'BUY' && trend === 'BULLISH') {
     confidence += 25;
-    reasons.push('EMA trend supports SELL');
+    reasons.push('Trend supports BUY');
   }
 
-  if (action === 'BUY' && rsi > 70) {
-    confidence -= 20;
+  if (action === 'SELL' && trend === 'BEARISH') {
+    confidence += 25;
+    reasons.push('Trend supports SELL');
+  }
+
+  if (action === 'BUY' && trend === 'BEARISH') {
+    confidence -= 25;
+    reasons.push('BUY against bearish trend');
+  }
+
+  if (action === 'SELL' && trend === 'BULLISH') {
+    confidence -= 25;
+    reasons.push('SELL against bullish trend');
+  }
+
+  if (rsi >= 70 && action === 'BUY') {
+    confidence -= 15;
     reasons.push('RSI overbought');
   }
 
-  if (action === 'SELL' && rsi < 30) {
-    confidence -= 20;
+  if (rsi <= 30 && action === 'SELL') {
+    confidence -= 15;
     reasons.push('RSI oversold');
   }
 
@@ -2651,9 +2668,28 @@ function smartOpportunityFilter(signal) {
 
   confidence = Math.max(0, Math.min(100, confidence));
 
+  let riskLevel = 'LOW';
+  let suggestedVolumeMultiplier = 0.3;
+
+  if (confidence >= 80) {
+    riskLevel = 'STRONG';
+    suggestedVolumeMultiplier = 1;
+  } else if (confidence >= 70) {
+    riskLevel = 'GOOD';
+    suggestedVolumeMultiplier = 0.75;
+  } else if (confidence >= 60) {
+    riskLevel = 'NORMAL';
+    suggestedVolumeMultiplier = 0.5;
+  }
+
+  const minConfidence = Number(process.env.MIN_TELEGRAM_CONFIDENCE || 70);
+
   return {
-    allowed: confidence >= Number(process.env.MIN_TELEGRAM_CONFIDENCE || 75),
+    allowed: confidence >= minConfidence,
     confidence,
+    trend,
+    riskLevel,
+    suggestedVolumeMultiplier,
     reason: reasons.join(' | ') || 'Neutral market'
   };
 }
@@ -2669,9 +2705,19 @@ const trend = detectTrendFromPrice(currentPrice, signal.entryPrice || currentPri
 
 const decision = smartOpportunityFilter(signal);
 
-signal.trend = trend;
+signal.trend = decision.trend || trend;
 signal.confidence = decision.confidence || 0;
+signal.riskLevel = decision.riskLevel || 'LOW';
+signal.suggestedVolumeMultiplier = decision.suggestedVolumeMultiplier || 0.3;
 signal.aiNote = decision.reason || '';
+signal.aiAnalysis = {
+  confidence: signal.confidence,
+  trend: signal.trend,
+  riskLevel: signal.riskLevel,
+  suggestedVolumeMultiplier: signal.suggestedVolumeMultiplier,
+  reason: signal.aiNote,
+  analyzedAt: now()
+};
 
     const minConfidence = Number(process.env.MIN_TELEGRAM_CONFIDENCE || 60);
 
