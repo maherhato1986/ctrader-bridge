@@ -3586,15 +3586,20 @@ await sendTradeAlertToTelegram('🚀 TRADE EXECUTED', {
   action: signal.action,
   volume: finalVolume,
   positionId: executedPositionId,
-  price: executedPrice,
+  price: executedPrice || result?.payload?.position?.price || result?.payload?.executionEvent?.position?.price || '-',
   status: 'EXECUTED'
 });
 
 return res.json({
   ok: true,
+  action: signal.action,
+  volume: finalVolume,
+  positionId: executedPositionId,
+  executedPositionId,
+  price: executedPrice,
+  executedPrice,
   symbolId: finalSymbolId,
   resolvedSymbol,
-  volume: finalVolume,
   result
 });
 
