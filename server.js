@@ -519,17 +519,26 @@ async function sendSignalToTelegram(signal) {
 
   try {
 
-    const text = `
+const text = `
 🚀 إشارة تداول جديدة
 
 🆔 Signal ID: ${signal.signalId || "-"}
 📊 Symbol: ${signal.symbol || "-"}
 📈 Action: ${signal.action || "-"}
-💰 Volume: ${signal.volume || "-"}
+💰 Original Volume: ${signal.volume || "-"}
 🛑 Stop Loss: ${signal.stopLossUsd || "-"} USD
 🎯 Take Profit: ${signal.takeProfitUsd || "-"} USD
-📊 Status: ${signal.status || "pending"}
 
+🧠 Smart Analysis:
+📊 Confidence: ${signal.confidence ?? "-"}%
+📉 Trend: ${signal.trend || "-"}
+⚠️ Risk Level: ${signal.riskLevel || "-"}
+📦 Suggested Volume Factor: ${signal.suggestedVolumeMultiplier || "-"}
+
+📝 Reason:
+${signal.aiNote || "-"}
+
+📌 Status: ${signal.status || "pending"}
 ⏰ ${new Date().toLocaleString()}
 `;
 
