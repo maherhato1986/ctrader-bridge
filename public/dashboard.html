@@ -141,6 +141,27 @@ th{color:#9fb2c8;font-weight:700}
       <div class="logs" id="logs"></div>
     </div>
   </section>
+
+  <section class="card" style="margin-top:14px">
+  <h4>TRADES HISTORY & EXIT REASONS</h4>
+  <table>
+    <thead>
+      <tr>
+        <th>Position ID</th>
+        <th>Symbol</th>
+        <th>Side</th>
+        <th>Volume</th>
+        <th>Entry</th>
+        <th>Exit</th>
+        <th>P/L $</th>
+        <th>Exit Reason</th>
+        <th>Opened</th>
+        <th>Closed</th>
+      </tr>
+    </thead>
+    <tbody id="tradesHistoryBody"></tbody>
+  </table>
+</section>
 <section class="card" style="margin-top:14px">
   <h4>ACCESS & ACTIVITY LOG</h4>
   <table>
@@ -265,6 +286,7 @@ if (Array.isArray(data.positions) && data.positions.length) {
 }
 
 renderSignals(data.pending || []);
+    renderTradesHistory(data.trades || []);
     renderRiskStatus(data.riskStatus);
 addLog("Dashboard synced successfully", "green");
 
@@ -365,6 +387,60 @@ function renderPositions(positions){
   }).join("");
 }
 
+  function renderTradesHistory(trades){
+  const body = document.getElementById("tradesHistoryBody");
+  if(!body) return;
+
+  if(!Array.isArray(trades) || !trades.length){
+    body.innerHTML = `<tr><td colspan="10">No trades history</td></tr>`;
+    return;
+  }
+
+  const rows = trades
+    .slice()
+    .reverse()
+    .slice(0, 30)
+    .map(t => {
+      const pnl =
+        t.netProfitUsd ??
+        t.profitUsd ??
+        t.pnl ??
+        t.profit ??
+        t.closeProfit ??
+        null;
+
+      const pnlText = pnl !== null && pnl !== undefined
+        ? Number(pnl).toFixed(2)
+        : "-";
+
+      const reason =
+        t.exitReason ||
+        t.closeReason ||
+        t.reason ||
+        t.status ||
+        (t.closedAt || t.exitTime ? "CLOSED" : "OPEN");
+
+      return `
+        <tr>
+          <td>${t.positionId || "-"}</td>
+          <td>${t.symbol || t.symbolId || "XAUUSD"}</td>
+          <td>${t.side || t.action || "-"}</td>
+          <td>${t.volume || "-"}</td>
+          <td>${t.entryPrice || t.entry || t.price || "-"}</td>
+          <td>${t.exitPrice || t.closePrice || "-"}</td>
+          <td class="${Number(pnlText) >= 0 ? 'green' : 'red'}">${pnlText}</td>
+          <td>${reason}</td>
+          <td>${t.createdAt || t.openedAt || "-"}</td>
+          <td>${t.closedAt || t.exitTime || "-"}</td>
+        </tr>
+      `;
+    })
+    .join("");
+
+  body.innerHTML = rows;
+}
+
+  
 function renderSignals(signals){
   const body = document.getElementById("signalsBody");
   if(!signals.length){
