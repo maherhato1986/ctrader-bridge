@@ -197,26 +197,39 @@ async function getSignalById(signalId) {
 
 async function handleApprove(chatId, signalId, callbackQueryId = null, messageId = null) {
   try {
+    const signal = await getSignalFromPending(signalId);
     const result = await approveSignal(signalId);
 
-const positionId =
-  result.result?.payload?.position?.positionId ||
-  result.result?.payload?.executionEvent?.position?.positionId ||
-  result.result?.positionId ||
-  '-';
+    const action = signal?.action || result.action || '-';
+    const volume = result.volume || signal?.volume || '-';
 
-const executedPrice =
-  result.result?.payload?.position?.price ||
-  result.result?.payload?.executionEvent?.position?.price ||
-  result.price ||
-  '-';
+    const position =
+      result.result?.payload?.position ||
+      result.result?.payload?.executionEvent?.position ||
+      result.result?.payload?.order ||
+      {};
 
-const text = `🚀 تم تنفيذ الصفقة بنجاح
+    const positionId =
+      position.positionId ||
+      result.positionId ||
+      result.executedPositionId ||
+      '-';
+
+    const executedPrice =
+      position.price ||
+      position.entryPrice ||
+      result.price ||
+      result.executedPrice ||
+      '-';
+
+    const status = result.result?.simulated ? 'SIMULATION' : 'LIVE EXECUTED';
+
+    const text = `🚀 تم تنفيذ الصفقة بنجاح
 
 🆔 Signal ID: ${signalId}
-📊 Symbol: ${result.resolvedSymbol?.symbolName || 'XAUUSD'}
-📈 Action: ${result.action || '-'}
-💰 Volume: ${result.volume ?? '-'}
+📊 Symbol: ${result.resolvedSymbol?.symbolName || signal?.symbol || 'XAUUSD'}
+📈 Action: ${action}
+💰 Volume: ${volume}
 🆔 Position ID: ${positionId}
 💵 Entry Price: ${executedPrice}
 
@@ -226,7 +239,7 @@ const text = `🚀 تم تنفيذ الصفقة بنجاح
 • Partial Close: مفعّل
 • Smart Exit: مفعّل
 
-📌 Status: ${result.result?.simulated ? 'SIMULATION' : 'LIVE EXECUTED'}
+📌 Status: ${status}
 ⏱ Time: ${new Date().toLocaleString()}`;
 
     if (callbackQueryId) {
