@@ -199,13 +199,35 @@ async function handleApprove(chatId, signalId, callbackQueryId = null, messageId
   try {
     const result = await approveSignal(signalId);
 
- const text = `✅ تمت الموافقة على الإشارة
+const positionId =
+  result.result?.payload?.position?.positionId ||
+  result.result?.payload?.executionEvent?.position?.positionId ||
+  result.result?.positionId ||
+  '-';
+
+const executedPrice =
+  result.result?.payload?.position?.price ||
+  result.result?.payload?.executionEvent?.position?.price ||
+  result.price ||
+  '-';
+
+const text = `🚀 تم تنفيذ الصفقة بنجاح
 
 🆔 Signal ID: ${signalId}
-📈 Symbol ID: ${result.symbolId ?? '-'}
-📦 Resolved Symbol: ${result.resolvedSymbol?.symbolName ?? '-'}
+📊 Symbol: ${result.resolvedSymbol?.symbolName || 'XAUUSD'}
+📈 Action: ${result.action || '-'}
 💰 Volume: ${result.volume ?? '-'}
-🧪 Result: ${result.result?.simulated ? 'SIMULATION' : 'LIVE'}`;
+🆔 Position ID: ${positionId}
+💵 Entry Price: ${executedPrice}
+
+🛡️ إدارة الصفقة:
+• Break Even: مفعّل
+• Trailing Stop: مفعّل
+• Partial Close: مفعّل
+• Smart Exit: مفعّل
+
+📌 Status: ${result.result?.simulated ? 'SIMULATION' : 'LIVE EXECUTED'}
+⏱ Time: ${new Date().toLocaleString()}`;
 
     if (callbackQueryId) {
       await answerCallbackQuery(callbackQueryId, 'Approved');
