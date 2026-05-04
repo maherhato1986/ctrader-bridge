@@ -3530,18 +3530,18 @@ await sendTradeAlertToTelegram('🚀 TRADE EXECUTED', {
   symbol: signal.symbol,
   action: signal.action,
   volume: finalVolume,
- positionId: executedPositionId,
-price: executedPrice,
+  positionId: executedPositionId,
+  price: executedPrice,
   status: 'EXECUTED'
 });
 
-    return res.json({
-      ok: true,
-      symbolId: finalSymbolId,
-      resolvedSymbol,
-      volume: finalVolume,
-      result
-    });
+return res.json({
+  ok: true,
+  symbolId: finalSymbolId,
+  resolvedSymbol,
+  volume: finalVolume,
+  result
+});
 
   } catch (error) {
     console.error('❌ APPROVE ERROR:', error);
@@ -4411,32 +4411,7 @@ setInterval(async () => {
     console.log("Trailing loop error:", err.message);
   }
 }, 3000);
-// آخر الملف
 
-async function executeTradeOnCTrader(signal) {
-  try {
-    const side = signal.action === 'buy' ? 'BUY' : 'SELL';
 
-    const response = await axios.post(
-      'https://api.spotware.com/connect/tradingaccounts/6139088/orders',
-      {
-        symbolName: signal.symbol,
-        orderType: 'MARKET',
-        tradeSide: side,
-        volume: Number(signal.volume || 1000)
-      },
-      {
-        headers: {
-  Authorization: `Bearer ${process.env.CTRADER_ACCESS_TOKEN}`
-}
-      }
-    );
 
-    return response.data;
-
- } catch (err) {
-  console.error('❌ EXECUTION ERROR:', err.response?.data || err.message);
-  throw err;
-}
-}
 
