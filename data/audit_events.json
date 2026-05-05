@@ -358,5 +358,26 @@
       "symbol": "XAUUSD",
       "action": "buy"
     }
+  },
+  {
+    "time": "2026-05-05T05:05:02.655Z",
+    "action": "Execute Trade Start",
+    "ip": "::ffff:67.205.174.166",
+    "userAgent": "axios/1.15.2",
+    "details": {
+      "symbol": "XAUUSD",
+      "action": "buy"
+    }
+  },
+  {
+    "time": "2026-05-05T05:05:04.122Z",
+    "action": "Executed Trade",
+    "ip": "::ffff:67.205.174.166",
+    "userAgent": "axios/1.15.2",
+    "details": {
+      "symbol": "XAUUSD",
+      "volume": 1000,
+      "action": "buy"
+    }
   }
 ]
