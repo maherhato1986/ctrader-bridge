@@ -2746,10 +2746,7 @@ app.post('/signals', async (req, res) => {
     });
 
     // 🧠 TREND احتياطي من السعر
-    const trendPrice = detectTrendFromPrice(
-      currentPrice,
-      signal.entryPrice || currentPrice
-    );
+    const priceTrend = detectTrendFromPrice(currentPrice, signal.entryPrice || currentPrice);
 
     // 🎯 اختيار الترند النهائي
     const finalTrend =
@@ -2769,7 +2766,7 @@ app.post('/signals', async (req, res) => {
     });
 
     // 🧠 دمج النتائج
-    signal.trend = decision.trend || finalTrend;
+   signal.trend = decision.trend || priceTrend;
     signal.confidence = decision.confidence || baseConfidence;
     signal.riskLevel = decision.riskLevel || 'LOW';
     signal.suggestedVolumeMultiplier =
