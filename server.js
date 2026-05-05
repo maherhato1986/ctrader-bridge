@@ -2384,8 +2384,9 @@ function normalizeMoney(value, digits = 2) {
 
   if (!Number.isFinite(n)) return 0;
 
-  // cTrader غالباً يرجع المال مضروب حسب moneyDigits
-  if (Math.abs(n) > 100000) {
+  // cTrader يرجع قيم المال غالباً كـ integer حسب moneyDigits
+  // مثال: -41 مع moneyDigits=2 تعني -0.41
+  if (Number.isInteger(n) && d > 0) {
     return n / Math.pow(10, d);
   }
 
