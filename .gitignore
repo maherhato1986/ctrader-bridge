@@ -8,3 +8,5 @@ rejected_signals.json
 trades.json
 xaudsd.json
 data/*.json
+deploy.sh
+xaudsd.json
