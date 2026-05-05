@@ -2505,7 +2505,12 @@ app.get('/api/dashboard', auth, async (req, res) => {
       const swap = normalizeMoney(info.swap || p.swap, moneyDigits);
       const commission = normalizeMoney(info.commission || p.commission, moneyDigits);
 
-      const netUsd = Number((calculatedProfit + swap + commission).toFixed(2));
+      // 🔥 استخدم الربح الحقيقي من cTrader إذا موجود
+const brokerNet = getPositionNetProfit(p);
+
+const netUsd = brokerNet !== 0
+  ? Number(brokerNet.toFixed(2))
+  : Number((calculatedProfit + swap + commission).toFixed(2));
       floatingPnL += netUsd;
 
       return {
