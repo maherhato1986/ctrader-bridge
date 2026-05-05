@@ -345,28 +345,7 @@ function renderPositions(positions){
         ? "SELL"
         : "BUY";
 
-    const currentPrice = normalizePrice(
-      p.currentPrice ||
-      p.livePrice ||
-      p.bid ||
-      p.ask ||
-      0
-    );
-
-    const entry = Number(entryPrice || 0);
-    const units = Number(rawVolume || 0) / 100;
-
-    let calculatedNet = null;
-
-    if (entry && currentPrice && units) {
-      const isSell = sideText === "SELL";
-      calculatedNet = isSell
-        ? (entry - currentPrice) * units
-        : (currentPrice - entry) * units;
-    }
-
-    const swap = Number(p.swap || 0) / 100;
-    const commission = Number(p.commission || 0) / 100;
+ 
 
     const netValue = p.netUsd !== null && p.netUsd !== undefined
   ? Number(p.netUsd).toFixed(2)
