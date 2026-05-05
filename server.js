@@ -3423,6 +3423,69 @@ function smartTradingEngine(signal, aiDecision = {}) {
 }
 
 
+function smartRiskBrain({ signal, aiDecision, positions = [], account = {} }) {
+  const enabled = String(process.env.SMART_RISK_ENABLED || 'true') === 'true';
+  if (!enabled) return { allowed: true, volumeFactor: 1, reason: 'Smart risk disabled' };
+
+  const engine = smartTradingEngine(signal, aiDecision);
+
+  const confidence = Number(engine.confidence || signal.confidence || 50);
+  const maxOpenPositions = Number(process.env.MAX_OPEN_POSITIONS || 3);
+
+  if (positions.length >= maxOpenPositions) {
+    return {
+      allowed: false,
+      volumeFactor: 0,
+      reason: `Max open positions reached: ${positions.length}/${maxOpenPositions}`,
+      engine
+    };
+  }
+
+  const floatingPnL = positions.reduce((sum, p) => {
+    return sum + Number(getPositionNetProfit(p) || 0);
+  }, 0);
+
+  const maxDailyLoss = Number(process.env.MAX_DAILY_LOSS_USD || 250);
+  if (floatingPnL <= -Math.abs(maxDailyLoss)) {
+    return {
+      allowed: false,
+      volumeFactor: 0,
+      reason: `Daily loss protection triggered: ${floatingPnL.toFixed(2)} USD`,
+      engine
+    };
+  }
+
+  const maxProfitLock = Number(process.env.MAX_DAILY_PROFIT_LOCK_USD || 500);
+  if (floatingPnL >= Math.abs(maxProfitLock)) {
+    return {
+      allowed: false,
+      volumeFactor: 0,
+      reason: `Daily profit locked: ${floatingPnL.toFixed(2)} USD`,
+      engine
+    };
+  }
+
+  let volumeFactor = Number(engine.volumeMultiplier || 1);
+
+  if (confidence >= 90) {
+    volumeFactor = Number(process.env.EXTREME_CONFIDENCE_VOLUME_FACTOR || 2);
+  } else if (confidence >= Number(process.env.MIN_CONFIDENCE_TO_FULL_RISK || 80)) {
+    volumeFactor = Number(process.env.STRONG_CONFIDENCE_VOLUME_FACTOR || 1.5);
+  } else if (confidence < 60) {
+    volumeFactor = Number(process.env.LOW_CONFIDENCE_VOLUME_FACTOR || 0.4);
+  }
+
+  return {
+    allowed: true,
+    confidence,
+    trend: engine.trend,
+    riskLevel: engine.riskLevel,
+    volumeFactor,
+    reason: engine.reason,
+    engine
+  };
+}
+
 app.post('/approve', auth, async (req, res) => {
   try {
     const { signalId, symbolId } = req.body;
@@ -3480,7 +3543,38 @@ app.post('/approve', auth, async (req, res) => {
 const aiDecision = aiApprovalEnabled
   ? await aiTradeDecision(signal)
   : { decision: 'ALLOW', confidence: 100, reason: 'AI approval disabled' };
+const positions = await getOpenPositionsFromCTrader();
+const account = await getCTraderAccountInfo();
 
+const smartRisk = smartRiskBrain({
+  signal,
+  aiDecision,
+  positions,
+  account
+});
+
+if (!smartRisk.allowed) {
+  await sendTradeAlertToTelegram('🛑 TRADE BLOCKED BY SMART RISK BRAIN', {
+    symbol: signal.symbol,
+    action: signal.action,
+    volume: signal.volume || '-',
+    positionId: '-',
+    price: '-',
+    status: smartRisk.reason
+  });
+
+  return res.status(409).json({
+    ok: false,
+    message: smartRisk.reason,
+    smartRisk
+  });
+}
+
+signal.confidence = smartRisk.confidence || signal.confidence;
+signal.trend = smartRisk.trend || signal.trend;
+signal.riskLevel = smartRisk.riskLevel || signal.riskLevel;
+signal.suggestedVolumeMultiplier = smartRisk.volumeFactor;
+signal.aiNote = `${signal.aiNote || ''} | SmartRisk: ${smartRisk.reason}`;
 
 const riskCheck = validateTradeRisk(signal);
 
@@ -4378,7 +4472,7 @@ async function autoReEntryFromClosedTrade(closedTrade) {
       stopLossUsd: Number(closedTrade.stopLossUsd || 10),
       confidence
     });
-
+volume = normalizeVolumeUnits(Number(volume) * Number(signal.suggestedVolumeMultiplier || 1));
     const boost = Number(process.env.AUTO_REENTRY_VOLUME_MULTIPLIER || 1.2);
     volume = normalizeVolumeUnits(volume * boost);
 
