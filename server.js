@@ -2732,6 +2732,39 @@ function smartOpportunityFilter(signal) {
 app.post('/signals', async (req, res) => {
   try {
     const signal = buildSignal(req.body);
+
+    // 🧠 SMART TREND ANALYSIS (آمن 100%)
+const price = livePrices[41] || 0;
+
+const trend = detectTrend({
+  emaFast: signal.emaFast,
+  emaSlow: signal.emaSlow,
+  price
+});
+
+const confidence = calculateConfidence({
+  trend,
+  rsi: signal.rsi
+});
+
+// حفظ داخل الإشارة
+signal.trend = trend;
+signal.confidence = confidence;
+
+// فلترة ذكية
+if (trend === "SIDEWAYS") {
+  return res.json(markSignalBlocked(signal, "Market sideways", {
+    trend,
+    confidence
+  }));
+}
+
+if (confidence < 60) {
+  return res.json(markSignalBlocked(signal, "Low confidence", {
+    trend,
+    confidence
+  }));
+}
    
 
 const symbolId = 41;
