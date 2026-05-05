@@ -614,7 +614,29 @@ function buildSignal(body) {
   createdAt: now()
 };
 }
+function detectTrend({ emaFast, emaSlow, price }) {
+  if (!emaFast || !emaSlow || !price) return "UNKNOWN";
 
+  if (price > emaFast && emaFast > emaSlow) return "STRONG_UP";
+  if (price < emaFast && emaFast < emaSlow) return "STRONG_DOWN";
+
+  if (price > emaFast) return "WEAK_UP";
+  if (price < emaFast) return "WEAK_DOWN";
+
+  return "SIDEWAYS";
+}
+function calculateConfidence({ trend, rsi }) {
+  let score = 50;
+
+  if (trend === "STRONG_UP" || trend === "STRONG_DOWN") score += 30;
+  if (trend === "WEAK_UP" || trend === "WEAK_DOWN") score += 10;
+  if (trend === "SIDEWAYS") score -= 20;
+
+  if (rsi > 55 && rsi < 70) score += 10;
+  if (rsi > 70) score -= 10;
+
+  return Math.max(10, Math.min(100, score));
+}
 
 function getProfitMultiplier(confidence) {
   if (confidence >= 90) return 2.0;   // 🔥 قوي جداً
