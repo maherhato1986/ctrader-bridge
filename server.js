@@ -45,7 +45,12 @@ app.get('/test', (req, res) => {
 });
 
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+let resend = null;
+
+if (process.env.RESEND_API_KEY && process.env.RESEND_API_KEY !== 'off') {
+  const { Resend } = require('resend');
+  resend = new Resend(process.env.RESEND_API_KEY);
+}
 
 
 app.use(express.json());
