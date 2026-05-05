@@ -3447,22 +3447,28 @@ let finalVolume = 0;
 if (signal.autoRisk === true || !Number(signal.volume || 0)) {
   console.log('🧮 Risk Engine calculating volume from Equity + SL...');
 
+  const riskPercent = Number(signal.riskPercent || process.env.RISK_PER_TRADE_PERCENT || 0.5);
+  const stopLossUsd = Math.max(5, Number(signal.stopLossUsd || 10));
+  const confidence = Number(signal.confidence || aiDecision?.confidence || 50);
+
   finalVolume = calculateAutoVolume({
     equity: accountEquity,
-    riskPercent: signal.riskPercent || process.env.RISK_PER_TRADE_PERCENT || 0.5,
-    stopLossUsd: signal.stopLossUsd || 10,
-    confidence: Number(signal.confidence || aiDecision?.confidence || 50)
+    riskPercent,
+    stopLossUsd,
+    confidence
   });
 
   signal.riskEngine = {
     enabled: true,
     equity: accountEquity,
-    riskPercent: Number(signal.riskPercent || process.env.RISK_PER_TRADE_PERCENT || 0.5),
-    stopLossUsd: Number(signal.stopLossUsd || 10),
-    confidence: Number(signal.confidence || aiDecision?.confidence || 50),
+    riskPercent,
+    stopLossUsd,
+    confidence,
     calculatedVolume: finalVolume,
     calculatedAt: now()
   };
+
+  console.log('✅ RISK ENGINE RESULT:', signal.riskEngine);
 } else {
   finalVolume = Number(signal.volume || 0);
 }
