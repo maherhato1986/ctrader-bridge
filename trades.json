@@ -1,1 +1,9 @@
-[]
+[
+  {
+    "positionId": 615643948,
+    "symbolId": 41,
+    "breakEvenDone": false,
+    "source": "broker_sync",
+    "peakPrice": 4545.74
+  }
+]
