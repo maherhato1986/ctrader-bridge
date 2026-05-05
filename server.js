@@ -249,6 +249,7 @@ let liveFreeMargin = 0;
 const pendingSignals = new Map();
 const executedSignals = new Set();
 let lastExecutionTime = 0;
+let lastAutoReEntryTime = 0;
 
 function isMarketClosedError(msg) {
   const text = JSON.stringify(msg || {}).toLowerCase();
@@ -3593,6 +3594,13 @@ if (signal.autoRisk === true || !Number(signal.volume || 0)) {
       symbolId: finalSymbolId,
       resolvedSymbol,
 
+      confidence: signal.confidence || 0,
+riskLevel: signal.riskLevel || 'LOW',
+aiAnalysis: signal.aiAnalysis || null,
+stopLossUsd: signal.stopLossUsd || 10,
+takeProfitUsd: signal.takeProfitUsd || 25,
+reEntryCount: Number(signal.reEntryCount || 0)
+
       positionId:
         result?.payload?.positionId ||
         result?.payload?.executionEvent?.position?.positionId ||
@@ -4193,7 +4201,85 @@ app.get('/pending', auth, (req, res) => {
   }
 });
 
+async function autoReEntryFromClosedTrade(closedTrade) {
+  try {
+    if (process.env.AUTO_REENTRY_ENABLED !== 'true') return;
 
+    const cooldownMs = Number(process.env.AUTO_REENTRY_COOLDOWN_MS || 180000);
+    if (Date.now() - lastAutoReEntryTime < cooldownMs) {
+      console.log('⏳ AUTO RE-ENTRY SKIPPED: cooldown active');
+      return;
+    }
+
+    const confidence = Number(closedTrade.confidence || closedTrade.aiAnalysis?.confidence || 0);
+    const minConfidence = Number(process.env.AUTO_REENTRY_MIN_CONFIDENCE || 80);
+
+    if (confidence < minConfidence) {
+      console.log('❌ AUTO RE-ENTRY SKIPPED: low confidence', confidence);
+      return;
+    }
+
+    const finalSymbolId = Number(closedTrade.symbolId || 41);
+
+    const positions = await getOpenPositionsFromCTrader();
+    const sameSymbolOpen = positions.some(p => {
+      const sid = p.symbolId || p.tradeData?.symbolId || p.position?.symbolId;
+      return Number(sid) === finalSymbolId;
+    });
+
+    if (sameSymbolOpen) {
+      console.log('❌ AUTO RE-ENTRY SKIPPED: position already open');
+      return;
+    }
+
+    const account = await getCTraderAccountInfo();
+
+    let volume = calculateAutoVolume({
+      equity: account.equity || account.balance || liveBalance,
+      riskPercent: Number(process.env.AUTO_REENTRY_RISK_PERCENT || process.env.RISK_PER_TRADE_PERCENT || 0.5),
+      stopLossUsd: Number(closedTrade.stopLossUsd || 10),
+      confidence
+    });
+
+    const boost = Number(process.env.AUTO_REENTRY_VOLUME_MULTIPLIER || 1.2);
+    volume = normalizeVolumeUnits(volume * boost);
+
+    console.log('🔥 AUTO RE-ENTRY EXECUTING:', {
+      signalId: closedTrade.signalId,
+      symbolId: finalSymbolId,
+      action: closedTrade.action,
+      confidence,
+      volume
+    });
+
+    const result = await executeOrder({
+      symbolId: finalSymbolId,
+      side: closedTrade.action,
+      volume
+    });
+
+    lastAutoReEntryTime = Date.now();
+
+    await sendTradeAlertToTelegram('🔥 AUTO RE-ENTRY EXECUTED', {
+      symbol: closedTrade.symbol || 'XAUUSD',
+      action: closedTrade.action,
+      volume,
+      positionId:
+        result?.payload?.positionId ||
+        result?.payload?.executionEvent?.position?.positionId ||
+        result?.payload?.position?.positionId ||
+        '-',
+      price:
+        result?.payload?.position?.price ||
+        result?.payload?.executionEvent?.position?.price ||
+        '-',
+      status: 'AUTO RE-ENTRY'
+    });
+
+  } catch (err) {
+    console.log('❌ AUTO RE-ENTRY ERROR:', err.message);
+  }
+}
 
 
 // 1. دالة المطابقة الفرعية (ضعها خارج الـ setInterval أو فوقه)
@@ -4246,15 +4332,18 @@ setInterval(async () => {
     }
 
 
+if (!positions || positions.length === 0) {
+  if (trades.length > 0) {
+    const lastTrade = trades[trades.length - 1];
 
-    // إذا لا توجد صفقات مفتوحة في cTrader
-    if (!positions || positions.length === 0) {
-      if (trades.length > 0) {
-        console.log('🧹 [Sync] No open positions on cTrader. Clearing trades.json');
-        saveToFile('trades.json', []);
-      }
-      return;
-    }
+    console.log('🧹 [Sync] No open positions on cTrader. Checking Auto Re-entry...');
+
+    await autoReEntryFromClosedTrade(lastTrade);
+
+    saveToFile('trades.json', []);
+  }
+  return;
+}
 
     // إذا توجد صفقات في الملف، طابقها مع الصفقات الحية
     if (trades.length > 0) {
