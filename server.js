@@ -2728,19 +2728,20 @@ signal.aiAnalysis = {
   analyzedAt: now()
 };
 
-    const minConfidence = Number(process.env.MIN_TELEGRAM_CONFIDENCE || 60);
+    // ✅ Smart Risk Mode:
+// لا نمنع الإشارة بسبب ضعف الثقة، بل نخفض حجم اللوت ونرسلها للموافقة
+const originalVolume = Number(signal.volume || 1000);
+const multiplier = Number(signal.suggestedVolumeMultiplier || 0.3);
 
-    if (!decision.allowed || Number(decision.confidence || 0) < minConfidence) {
-      console.log('⚠️ SIGNAL IGNORED - LOW CONFIDENCE:', decision.reason);
+signal.originalVolume = originalVolume;
+signal.volume = normalizeVolumeUnits(originalVolume * multiplier);
 
-      return res.json({
-        ok: false,
-        ignored: true,
-        reason: decision.reason,
-        confidence: decision.confidence || 0,
-        trend
-      });
-    }
+if (Number(signal.confidence || 0) < 60) {
+  signal.status = 'pending_low_confidence';
+  signal.aiNote = `${signal.aiNote || ''} | Low confidence: volume reduced instead of blocking`;
+} else {
+  signal.status = 'pending';
+}
 
     pendingSignals.set(signal.signalId, signal);
     saveToFile('pending_signals.json', Array.from(pendingSignals.values()));
