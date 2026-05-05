@@ -2734,43 +2734,37 @@ app.post('/signals', async (req, res) => {
     const signal = buildSignal(req.body);
 
     const symbolId = 41;
-
-    // 🟢 السعر الحالي
     const currentPrice = await getManagedCurrentPrice(symbolId, {});
 
-    // 🧠 TREND من EMA
     const trendEMA = detectTrend({
       emaFast: signal.emaFast,
       emaSlow: signal.emaSlow,
       price: currentPrice
     });
 
-    // 🧠 TREND احتياطي من السعر
-    const priceTrend = detectTrendFromPrice(currentPrice, signal.entryPrice || currentPrice);
+    const priceTrend = detectTrendFromPrice(
+      currentPrice,
+      signal.entryPrice || currentPrice
+    );
 
-    // 🎯 اختيار الترند النهائي
     const finalTrend =
-      trendEMA !== "UNKNOWN" ? trendEMA : trendPrice;
+      trendEMA !== "UNKNOWN" ? trendEMA : priceTrend;
 
-    // 🧠 Confidence
     const baseConfidence = calculateConfidence({
       trend: finalTrend,
       rsi: signal.rsi
     });
 
-    // 🧠 Smart Opportunity AI
     const decision = smartOpportunityFilter({
       ...signal,
       trend: finalTrend,
       confidence: baseConfidence
     });
 
-    // 🧠 دمج النتائج
-   signal.trend = decision.trend || priceTrend;
+    signal.trend = decision.trend || finalTrend;
     signal.confidence = decision.confidence || baseConfidence;
     signal.riskLevel = decision.riskLevel || 'LOW';
-    signal.suggestedVolumeMultiplier =
-      decision.suggestedVolumeMultiplier || 0.3;
+    signal.suggestedVolumeMultiplier = decision.suggestedVolumeMultiplier || 0.3;
     signal.aiNote = decision.reason || '';
 
     signal.aiAnalysis = {
@@ -2782,36 +2776,20 @@ app.post('/signals', async (req, res) => {
       analyzedAt: now()
     };
 
-    // 🧠 🚀 لا نوقف الصفقة — فقط نضعفها
-    if (signal.trend === "SIDEWAYS") {
-      signal.status = 'pending_weak';
-      signal.suggestedVolumeMultiplier = 0.2;
-      signal.aiNote += " | Sideways market → reduced risk";
-    }
-
-    if (Number(signal.confidence || 0) < 60) {
-      signal.status = 'pending_low_confidence';
-      signal.suggestedVolumeMultiplier = 0.3;
-      signal.aiNote += " | Low confidence → reduced volume";
-    } else {
-      signal.status = 'pending';
-    }
-
-    // 🧠 Risk Engine Setup
     signal.originalVolume = signal.volume || null;
     signal.volume = null;
     signal.autoRisk = true;
     signal.riskEngineNote =
       'Volume will be calculated on approval using equity + SL + riskPercent';
 
-    // 💾 حفظ
-    pendingSignals.set(signal.signalId, signal);
-    saveToFile(
-      'pending_signals.json',
-      Array.from(pendingSignals.values())
-    );
+    signal.status =
+      Number(signal.confidence || 0) < 60
+        ? 'pending_low_confidence'
+        : 'pending';
 
-    // 📩 تيليجرام
+    pendingSignals.set(signal.signalId, signal);
+    saveToFile('pending_signals.json', Array.from(pendingSignals.values()));
+
     await sendSignalToTelegram(signal);
 
     return res.json({
@@ -2828,7 +2806,6 @@ app.post('/signals', async (req, res) => {
     });
   }
 });
-
 app.get('/api/audit', (req, res) => {
   const events = readJson(AUDIT_EVENTS_FILE) || [];
   res.json({
