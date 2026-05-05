@@ -2733,78 +2733,88 @@ app.post('/signals', async (req, res) => {
   try {
     const signal = buildSignal(req.body);
 
-    // 🧠 SMART TREND ANALYSIS (آمن 100%)
-const price = livePrices[41] || 0;
+    const symbolId = 41;
 
-const trend = detectTrend({
-  emaFast: signal.emaFast,
-  emaSlow: signal.emaSlow,
-  price
-});
+    // 🟢 السعر الحالي
+    const currentPrice = await getManagedCurrentPrice(symbolId, {});
 
-const confidence = calculateConfidence({
-  trend,
-  rsi: signal.rsi
-});
+    // 🧠 TREND من EMA
+    const trendEMA = detectTrend({
+      emaFast: signal.emaFast,
+      emaSlow: signal.emaSlow,
+      price: currentPrice
+    });
 
-// حفظ داخل الإشارة
-signal.trend = trend;
-signal.confidence = confidence;
+    // 🧠 TREND احتياطي من السعر
+    const trendPrice = detectTrendFromPrice(
+      currentPrice,
+      signal.entryPrice || currentPrice
+    );
 
-// فلترة ذكية
-if (trend === "SIDEWAYS") {
-  return res.json(markSignalBlocked(signal, "Market sideways", {
-    trend,
-    confidence
-  }));
-}
+    // 🎯 اختيار الترند النهائي
+    const finalTrend =
+      trendEMA !== "UNKNOWN" ? trendEMA : trendPrice;
 
-if (confidence < 60) {
-  return res.json(markSignalBlocked(signal, "Low confidence", {
-    trend,
-    confidence
-  }));
-}
-   
+    // 🧠 Confidence
+    const baseConfidence = calculateConfidence({
+      trend: finalTrend,
+      rsi: signal.rsi
+    });
 
-const symbolId = 41;
-const currentPrice = await getManagedCurrentPrice(symbolId, {});
-const trend = detectTrendFromPrice(currentPrice, signal.entryPrice || currentPrice);
+    // 🧠 Smart Opportunity AI
+    const decision = smartOpportunityFilter({
+      ...signal,
+      trend: finalTrend,
+      confidence: baseConfidence
+    });
 
-const decision = smartOpportunityFilter(signal);
+    // 🧠 دمج النتائج
+    signal.trend = decision.trend || finalTrend;
+    signal.confidence = decision.confidence || baseConfidence;
+    signal.riskLevel = decision.riskLevel || 'LOW';
+    signal.suggestedVolumeMultiplier =
+      decision.suggestedVolumeMultiplier || 0.3;
+    signal.aiNote = decision.reason || '';
 
-signal.trend = decision.trend || trend;
-signal.confidence = decision.confidence || 0;
-signal.riskLevel = decision.riskLevel || 'LOW';
-signal.suggestedVolumeMultiplier = decision.suggestedVolumeMultiplier || 0.3;
-signal.aiNote = decision.reason || '';
-signal.aiAnalysis = {
-  confidence: signal.confidence,
-  trend: signal.trend,
-  riskLevel: signal.riskLevel,
-  suggestedVolumeMultiplier: signal.suggestedVolumeMultiplier,
-  reason: signal.aiNote,
-  analyzedAt: now()
-};
+    signal.aiAnalysis = {
+      confidence: signal.confidence,
+      trend: signal.trend,
+      riskLevel: signal.riskLevel,
+      suggestedVolumeMultiplier: signal.suggestedVolumeMultiplier,
+      reason: signal.aiNote,
+      analyzedAt: now()
+    };
 
-// ✅ لا نفرض Volume هنا
-// Risk Engine سيحسب الحجم الحقيقي عند الموافقة حسب Equity + SL + Risk%
-signal.originalVolume = signal.volume || null;
-signal.volume = null;
-signal.autoRisk = true;
-signal.riskEngineNote = 'Volume will be calculated on approval using equity + SL + riskPercent';
-    
+    // 🧠 🚀 لا نوقف الصفقة — فقط نضعفها
+    if (signal.trend === "SIDEWAYS") {
+      signal.status = 'pending_weak';
+      signal.suggestedVolumeMultiplier = 0.2;
+      signal.aiNote += " | Sideways market → reduced risk";
+    }
 
-if (Number(signal.confidence || 0) < 60) {
-  signal.status = 'pending_low_confidence';
-  signal.aiNote = `${signal.aiNote || ''} | Low confidence: volume reduced instead of blocking`;
-} else {
-  signal.status = 'pending';
-}
+    if (Number(signal.confidence || 0) < 60) {
+      signal.status = 'pending_low_confidence';
+      signal.suggestedVolumeMultiplier = 0.3;
+      signal.aiNote += " | Low confidence → reduced volume";
+    } else {
+      signal.status = 'pending';
+    }
 
+    // 🧠 Risk Engine Setup
+    signal.originalVolume = signal.volume || null;
+    signal.volume = null;
+    signal.autoRisk = true;
+    signal.riskEngineNote =
+      'Volume will be calculated on approval using equity + SL + riskPercent';
+
+    // 💾 حفظ
     pendingSignals.set(signal.signalId, signal);
-    saveToFile('pending_signals.json', Array.from(pendingSignals.values()));
+    saveToFile(
+      'pending_signals.json',
+      Array.from(pendingSignals.values())
+    );
 
+    // 📩 تيليجرام
     await sendSignalToTelegram(signal);
 
     return res.json({
