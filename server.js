@@ -617,11 +617,12 @@ function buildSignal(body) {
 
 
 function getProfitMultiplier(confidence) {
-  if (confidence >= 85) return 1.5;
-  if (confidence >= 75) return 1.2;
-  if (confidence >= 60) return 1.0;
-  if (confidence >= 45) return 0.6;
-  return 0.3;
+  if (confidence >= 90) return 2.0;   // 🔥 قوي جداً
+  if (confidence >= 80) return 1.6;   // 🔥 قوي
+  if (confidence >= 70) return 1.3;   // متوسط قوي
+  if (confidence >= 60) return 1.0;   // طبيعي
+  if (confidence >= 50) return 0.7;   // حذر
+  return 0.4;                         // ضعيف
 }
 
 function calculateAutoVolume({ equity, riskPercent, stopLossUsd, confidence = 50 }) {
@@ -1825,7 +1826,7 @@ function smartDecision(signal, trend = 'UNKNOWN') {
 
   console.log("🧠 AI CONFIDENCE:", ai);
 
-  if (ai.confidence < 40) {
+  if (ai.confidence < 55) {
     return {
       allowed: false,
       reason: `Low confidence (${ai.confidence})`
