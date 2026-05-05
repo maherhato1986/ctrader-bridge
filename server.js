@@ -249,6 +249,8 @@ let liveFreeMargin = 0;
 const pendingSignals = new Map();
 const executedSignals = new Set();
 let lastExecutionTime = 0;
+let lastAutonomousSignalTime = 0;
+let xauPriceHistory = [];
 let lastAutoReEntryTime = 0;
 
 function isMarketClosedError(msg) {
@@ -370,6 +372,11 @@ function startLivePriceStream() {
       const price = (bid + ask) / 2;
 
       livePrices[41] = price;
+      xauPriceHistory.push({ price, time: Date.now() });
+
+if (xauPriceHistory.length > 300) {
+  xauPriceHistory = xauPriceHistory.slice(-300);
+}
 
       // DEBUG
       // console.log('🔥 LIVE PRICE:', price);
@@ -2730,6 +2737,137 @@ function smartOpportunityFilter(signal) {
   };
 }
 
+function ema(values, period) {
+  if (!Array.isArray(values) || values.length < period) return null;
+
+  const k = 2 / (period + 1);
+  let emaValue = values.slice(0, period).reduce((a, b) => a + b, 0) / period;
+
+  for (let i = period; i < values.length; i++) {
+    emaValue = values[i] * k + emaValue * (1 - k);
+  }
+
+  return Number(emaValue.toFixed(2));
+}
+
+function calculateRSI(values, period = 14) {
+  if (!Array.isArray(values) || values.length <= period) return 50;
+
+  let gains = 0;
+  let losses = 0;
+
+  const recent = values.slice(-period - 1);
+
+  for (let i = 1; i < recent.length; i++) {
+    const diff = recent[i] - recent[i - 1];
+    if (diff >= 0) gains += diff;
+    else losses += Math.abs(diff);
+  }
+
+  if (losses === 0) return 70;
+
+  const rs = gains / losses;
+  const rsi = 100 - (100 / (1 + rs));
+
+  return Number(rsi.toFixed(2));
+}
+
+async function autonomousGoldEngine() {
+  try {
+    if (process.env.AUTONOMOUS_BOT_ENABLED !== 'true') return;
+
+    const cooldownMs = Number(process.env.AUTONOMOUS_SIGNAL_COOLDOWN_MS || 180000);
+
+    if (Date.now() - lastAutonomousSignalTime < cooldownMs) return;
+
+    const openPositions = await getOpenPositionsFromCTrader();
+
+    if (openPositions.length > 0) {
+      console.log('🤖 AUTO BOT WAITING: open position exists');
+      return;
+    }
+
+    const prices = xauPriceHistory.map(x => Number(x.price)).filter(Boolean);
+
+    if (prices.length < 60) {
+      console.log('🤖 AUTO BOT WAITING: not enough price history');
+      return;
+    }
+
+    const currentPrice = prices[prices.length - 1];
+    const emaFast = ema(prices, Number(process.env.AUTO_EMA_FAST || 20));
+    const emaSlow = ema(prices, Number(process.env.AUTO_EMA_SLOW || 50));
+    const rsi = calculateRSI(prices, 14);
+
+    const trend = detectTrend({
+      emaFast,
+      emaSlow,
+      price: currentPrice
+    });
+
+    let action = null;
+
+    if (trend === 'STRONG_UP' || trend === 'WEAK_UP') action = 'buy';
+    if (trend === 'STRONG_DOWN' || trend === 'WEAK_DOWN') action = 'sell';
+
+    if (!action) {
+      console.log('🤖 AUTO BOT SKIPPED: sideways market');
+      return;
+    }
+
+    const confidence = calculateConfidence({ trend, rsi });
+    const minConfidence = Number(process.env.AUTONOMOUS_MIN_CONFIDENCE || 80);
+
+    if (confidence < minConfidence) {
+      console.log('🤖 AUTO BOT SKIPPED: low confidence', confidence);
+      return;
+    }
+
+    const signal = buildSignal({
+      signalId: `auto-xau-${Date.now()}`,
+      symbol: 'XAUUSD',
+      action,
+      riskPercent: Number(process.env.AUTONOMOUS_RISK_PERCENT || 0.5),
+      stopLossUsd: Number(process.env.AUTONOMOUS_STOP_LOSS_USD || 10),
+      takeProfitUsd: Number(process.env.AUTONOMOUS_TAKE_PROFIT_USD || 25),
+      emaFast,
+      emaSlow,
+      rsi,
+      atr: Number(process.env.AUTONOMOUS_ATR || 12)
+    });
+
+    signal.volume = null;
+    signal.autoRisk = true;
+    signal.trend = trend;
+    signal.confidence = confidence;
+    signal.riskLevel = confidence >= 85 ? 'STRONG' : 'MEDIUM';
+    signal.suggestedVolumeMultiplier = getProfitMultiplier(confidence);
+    signal.aiNote = `Autonomous AI signal | ${trend} | RSI ${rsi}`;
+    signal.status = 'pending';
+    signal.aiAnalysis = {
+      confidence,
+      trend,
+      rsi,
+      emaFast,
+      emaSlow,
+      source: 'autonomous_engine',
+      analyzedAt: now()
+    };
+
+    pendingSignals.set(signal.signalId, signal);
+    saveToFile('pending_signals.json', Array.from(pendingSignals.values()));
+
+    await sendSignalToTelegram(signal);
+
+    lastAutonomousSignalTime = Date.now();
+
+    console.log('🤖 AUTO SIGNAL SENT:', signal);
+
+  } catch (err) {
+    console.log('❌ autonomousGoldEngine error:', err.message);
+  }
+}
+
 app.post('/signals', async (req, res) => {
   try {
     const signal = buildSignal(req.body);
@@ -4604,7 +4742,7 @@ setInterval(async () => {
 }, 1000);
 
 
-
+setInterval(autonomousGoldEngine, Number(process.env.AUTONOMOUS_CHECK_INTERVAL_MS || 30000));
 
 server.listen(PORT, () => {
   console.log(`🚀 Server running on ${PORT}`);
