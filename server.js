@@ -625,36 +625,33 @@ function getProfitMultiplier(confidence) {
 }
 
 function calculateAutoVolume({ equity, riskPercent, stopLossUsd, confidence = 50 }) {
-  const minVolume = Number(process.env.MIN_VOLUME_UNITS || 100);
-  const maxVolume = Number(process.env.MAX_VOLUME_UNITS || 1000);
-  const defaultVolume = Number(process.env.DEFAULT_VOLUME_UNITS || 100);
+  const minVolume = Number(process.env.MIN_VOLUME_UNITS || 1000);
+  const maxVolume = Number(process.env.MAX_VOLUME_UNITS || 50000);
 
-  const riskPct = Number(riskPercent || process.env.RISK_PER_TRADE_PERCENT || 1);
-  let stopDistance = Number(stopLossUsd || 0);
-
-// 🔥 fix minimum SL (important for XAUUSD)
-if (stopDistance < 5) {
-  console.log('⚠️ SL too small → auto fixed to 5');
-  stopDistance = 5;
-}
   const accountEquity = Number(equity || 0);
+  const riskPct = Number(riskPercent || process.env.RISK_PER_TRADE_PERCENT || 0.5);
+  let slUsd = Number(stopLossUsd || 10);
 
-  if (!accountEquity || !riskPct || !stopDistance) {
-    return defaultVolume;
-  }
+  if (slUsd < 5) slUsd = 5;
+  if (!accountEquity || !riskPct || !slUsd) return minVolume;
 
   const riskAmountUsd = accountEquity * (riskPct / 100);
 
-  const GOLD_PIP_VALUE = 1; // تقدير مبدئي
-const lots = riskAmountUsd / (stopDistance * GOLD_PIP_VALUE);
-  let volumeUnits = Math.round(lots * 10000);
+  // XAUUSD: 1 lot تقريبًا = 100 oz
+  // حجم cTrader عندك: 1000 units = 0.10 lot تقريبًا حسب النظام الحالي عندك
+  const contractSize = Number(process.env.XAUUSD_CONTRACT_SIZE || 100);
+  const volumePerLot = Number(process.env.CTRADER_VOLUME_PER_LOT || 10000);
 
-  // 🔥 هنا الذكاء الحقيقي
-  const multiplier = getProfitMultiplier(confidence);
-  volumeUnits = Math.round(volumeUnits * multiplier);
+  const lots = riskAmountUsd / (slUsd * contractSize);
+  let volumeUnits = lots * volumePerLot;
 
-  volumeUnits = Math.max(minVolume, volumeUnits);
-  volumeUnits = Math.min(maxVolume, volumeUnits);
+  const aiMultiplier = getProfitMultiplier(Number(confidence || 50));
+  volumeUnits = volumeUnits * aiMultiplier;
+
+  volumeUnits = normalizeVolumeUnits(volumeUnits);
+
+  if (volumeUnits < minVolume) volumeUnits = minVolume;
+  if (volumeUnits > maxVolume) volumeUnits = maxVolume;
 
   return volumeUnits;
 }
@@ -2734,13 +2731,13 @@ signal.aiAnalysis = {
   analyzedAt: now()
 };
 
-    // ✅ Smart Risk Mode:
-// لا نمنع الإشارة بسبب ضعف الثقة، بل نخفض حجم اللوت ونرسلها للموافقة
-const originalVolume = Number(signal.volume || 1000);
-const multiplier = Number(signal.suggestedVolumeMultiplier || 0.3);
-
-signal.originalVolume = originalVolume;
-signal.volume = normalizeVolumeUnits(originalVolume * multiplier);
+// ✅ لا نفرض Volume هنا
+// Risk Engine سيحسب الحجم الحقيقي عند الموافقة حسب Equity + SL + Risk%
+signal.originalVolume = signal.volume || null;
+signal.volume = null;
+signal.autoRisk = true;
+signal.riskEngineNote = 'Volume will be calculated on approval using equity + SL + riskPercent';
+    
 
 if (Number(signal.confidence || 0) < 60) {
   signal.status = 'pending_low_confidence';
@@ -3445,26 +3442,30 @@ if (
 }
 
 
-    let finalVolume = Number(signal.volume || 0);
+let finalVolume = 0;
 
-    if (!finalVolume) {
-      console.log('⚠️ No volume in signal, calculating auto volume...');
+if (signal.autoRisk === true || !Number(signal.volume || 0)) {
+  console.log('🧮 Risk Engine calculating volume from Equity + SL...');
 
-      if (typeof calculateAutoVolume === 'function') {
-      finalVolume = calculateAutoVolume({
-  equity: accountEquity,
-  riskPercent: signal.riskPercent,
-  stopLossUsd: signal.stopLossUsd,
-  confidence: Number(aiDecision.confidence || 50)
-});
-      } else {
-        finalVolume = calculateGoldVolumeFromRisk({
-          balance: accountEquity,
-          riskPercent: signal.riskPercent || 1,
-          stopLossUsd: signal.stopLossUsd || 10
-        });
-      }
-    }
+  finalVolume = calculateAutoVolume({
+    equity: accountEquity,
+    riskPercent: signal.riskPercent || process.env.RISK_PER_TRADE_PERCENT || 0.5,
+    stopLossUsd: signal.stopLossUsd || 10,
+    confidence: Number(signal.confidence || aiDecision?.confidence || 50)
+  });
+
+  signal.riskEngine = {
+    enabled: true,
+    equity: accountEquity,
+    riskPercent: Number(signal.riskPercent || process.env.RISK_PER_TRADE_PERCENT || 0.5),
+    stopLossUsd: Number(signal.stopLossUsd || 10),
+    confidence: Number(signal.confidence || aiDecision?.confidence || 50),
+    calculatedVolume: finalVolume,
+    calculatedAt: now()
+  };
+} else {
+  finalVolume = Number(signal.volume || 0);
+}
 
     finalVolume = Number(finalVolume);
 
