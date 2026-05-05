@@ -402,6 +402,33 @@ function saveToFile(file, data) {
 const BLOCKED_SIGNALS_FILE = 'blocked_signals.json';
 const CLOSED_TRADES_FILE = 'closed_trades.json';
 
+function saveClosedTradeHistory(trade) {
+  const history = readArrayFile(CLOSED_TRADES_FILE);
+
+  const positionId = String(trade.positionId || '');
+  const closedAt = trade.closedAt || trade.exitTime || now();
+
+  const exists = history.some(t =>
+    String(t.positionId) === positionId &&
+    String(t.closedAt || t.exitTime) === String(closedAt)
+  );
+
+  if (exists) return;
+
+  history.push({
+    positionId: trade.positionId || '-',
+    symbol: trade.symbol || 'XAUUSD',
+    side: trade.side || '-',
+    entryPrice: trade.entryPrice || '-',
+    exitPrice: trade.exitPrice || '-',
+    volume: trade.volume || 0,
+    netProfitUsd: Number(trade.netProfitUsd || 0),
+    closedAt
+  });
+
+  saveToFile(CLOSED_TRADES_FILE, history.slice(-500));
+}
+
 function readArrayFile(file) {
   try {
     if (!fs.existsSync(file)) return [];
@@ -1371,6 +1398,17 @@ async function applyPartialClose(symbolId, targetPositions = [], trades = []) {
 
       await closePosition(positionId, closeVolume);
 
+      saveClosedTradeHistory({
+  positionId,
+  symbol: 'XAUUSD',
+  side,
+  entryPrice,
+  exitPrice: currentPrice,
+  volume,
+  netProfitUsd,
+  closedAt: now()
+});
+
       trade.partialCloseDone = true;
       trade.partialCloseAt = now();
     }
@@ -1463,6 +1501,17 @@ async function smartExitAI(symbolId, targetPositions = [], trades = []) {
       });
 
       await closePosition(positionId, volume);
+
+      saveClosedTradeHistory({
+  positionId,
+  symbol: 'XAUUSD',
+  side,
+  entryPrice,
+  exitPrice: currentPrice,
+  volume,
+  netProfitUsd: estimatePositionProfitUsd(p, entryPrice, currentPrice, isBuy),
+  closedAt: now()
+});
 
       trade.exitReason = 'smart_exit';
       trade.exitPrice = currentPrice;
@@ -4351,7 +4400,7 @@ app.get('/api/dashboard', auth, async (req, res) => {
       const raw = fs.readFileSync('trades.json', 'utf8');
       trades = raw ? JSON.parse(raw) : [];
     }
-
+const closedTrades = readArrayFile(CLOSED_TRADES_FILE);
     return res.json({
       ok: true,
       mode: MODE,
@@ -4363,7 +4412,7 @@ app.get('/api/dashboard', auth, async (req, res) => {
         price: p.price || p.tradeData?.price
       })),
       pending,
-      trades
+      trades: closedTrades
     });
 
   } catch (err) {
