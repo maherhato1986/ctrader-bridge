@@ -3599,7 +3599,7 @@ riskLevel: signal.riskLevel || 'LOW',
 aiAnalysis: signal.aiAnalysis || null,
 stopLossUsd: signal.stopLossUsd || 10,
 takeProfitUsd: signal.takeProfitUsd || 25,
-reEntryCount: Number(signal.reEntryCount || 0)
+reEntryCount: Number(signal.reEntryCount || 0),
 
       positionId:
         result?.payload?.positionId ||
