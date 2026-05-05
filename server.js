@@ -400,6 +400,7 @@ function saveToFile(file, data) {
 
 
 const BLOCKED_SIGNALS_FILE = 'blocked_signals.json';
+const CLOSED_TRADES_FILE = 'closed_trades.json';
 
 function readArrayFile(file) {
   try {
