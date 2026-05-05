@@ -143,23 +143,35 @@ th{color:#9fb2c8;font-weight:700}
   </section>
 
   <section class="card" style="margin-top:14px">
-  <h4>TRADES HISTORY & EXIT REASONS</h4>
+  <div style="display:flex;justify-content:space-between;align-items:center;gap:12px">
+    <h4>TRADING HISTORY</h4>
+    <div>
+      <button class="btn refresh" onclick="setHistoryFilter('today')">Today</button>
+      <button class="btn refresh" onclick="setHistoryFilter('all')">All</button>
+    </div>
+  </div>
+
   <table>
     <thead>
       <tr>
-        <th>Position ID</th>
         <th>Symbol</th>
-        <th>Side</th>
-        <th>Volume</th>
-        <th>Entry</th>
-        <th>Exit</th>
-        <th>P/L $</th>
-        <th>Exit Reason</th>
-        <th>Opened</th>
-        <th>Closed</th>
+        <th>Opening Direction</th>
+        <th>Closing Time</th>
+        <th>Entry Price</th>
+        <th>Closing Price</th>
+        <th>Closing Quantity</th>
+        <th>Net USD</th>
+        <th>Balance USD</th>
       </tr>
     </thead>
     <tbody id="tradesHistoryBody"></tbody>
+    <tfoot>
+      <tr>
+        <td colspan="6"><b>Totals</b></td>
+        <td id="historyTotal" class="green"><b>0.00</b></td>
+        <td></td>
+      </tr>
+    </tfoot>
   </table>
 </section>
 <section class="card" style="margin-top:14px">
@@ -366,57 +378,90 @@ function renderPositions(positions){
   }).join("");
 }
 
-  function renderTradesHistory(trades){
+ let historyFilter = "today";
+
+function setHistoryFilter(type){
+  historyFilter = type;
+  loadData();
+}
+
+function renderTradesHistory(trades){
   const body = document.getElementById("tradesHistoryBody");
+  const totalEl = document.getElementById("historyTotal");
   if(!body) return;
 
   if(!Array.isArray(trades) || !trades.length){
-    body.innerHTML = `<tr><td colspan="10">No trades history</td></tr>`;
+    body.innerHTML = `<tr><td colspan="8">No trades history</td></tr>`;
+    if(totalEl) totalEl.innerHTML = `<b>0.00</b>`;
     return;
   }
 
-  const rows = trades
+  const today = new Date().toISOString().slice(0,10);
+
+  let filtered = trades.filter(t => {
+    if(historyFilter !== "today") return true;
+    const closeDate = String(t.closedAt || t.exitTime || t.closingTime || "").slice(0,10);
+    return closeDate === today;
+  });
+
+  filtered = filtered
     .slice()
     .reverse()
-    .slice(0, 30)
-    .map(t => {
-      const pnl =
-        t.netProfitUsd ??
-        t.profitUsd ??
-        t.pnl ??
-        t.profit ??
-        t.closeProfit ??
-        null;
+    .slice(0, 80);
 
-      const pnlText = pnl !== null && pnl !== undefined
-        ? Number(pnl).toFixed(2)
-        : "-";
+  let total = 0;
 
-      const reason =
-        t.exitReason ||
-        t.closeReason ||
-        t.reason ||
-        t.status ||
-        (t.closedAt || t.exitTime ? "CLOSED" : "OPEN");
+  const rows = filtered.map(t => {
+    const pnl = Number(
+      t.netProfitUsd ??
+      t.profitUsd ??
+      t.pnl ??
+      t.profit ??
+      t.closeProfit ??
+      0
+    );
 
-      return `
-        <tr>
-          <td>${t.positionId || "-"}</td>
-          <td>${t.symbol || t.symbolId || "XAUUSD"}</td>
-          <td>${t.side || t.action || "-"}</td>
-          <td>${t.volume || "-"}</td>
-          <td>${t.entryPrice || t.entry || t.price || "-"}</td>
-          <td>${t.exitPrice || t.closePrice || "-"}</td>
-          <td class="${Number(pnlText) >= 0 ? 'green' : 'red'}">${pnlText}</td>
-          <td>${reason}</td>
-          <td>${t.createdAt || t.openedAt || "-"}</td>
-          <td>${t.closedAt || t.exitTime || "-"}</td>
-        </tr>
-      `;
-    })
-    .join("");
+    total += pnl;
 
-  body.innerHTML = rows;
+    const side = String(t.side || t.action || "-").toUpperCase();
+    const symbol = t.symbol || "XAUUSD";
+
+    const volumeUnits = Number(t.volume || 0);
+    const lots = volumeUnits
+      ? (volumeUnits / 10000).toFixed(2) + " Lots"
+      : "-";
+
+    const closed =
+      t.closedAt ||
+      t.exitTime ||
+      t.closingTime ||
+      "-";
+
+    const balance =
+      t.balanceUsd ||
+      t.balance ||
+      "-";
+
+    return `
+      <tr>
+        <td>${symbol}</td>
+        <td><span class="tag ${side === "SELL" ? "sell" : "buy"}">${side}</span></td>
+        <td>${closed}</td>
+        <td>${t.entryPrice || t.entry || t.price || "-"}</td>
+        <td>${t.exitPrice || t.closePrice || "-"}</td>
+        <td>${lots}</td>
+        <td class="${pnl >= 0 ? "green" : "red"}">${pnl.toFixed(2)}</td>
+        <td>${balance}</td>
+      </tr>
+    `;
+  }).join("");
+
+  body.innerHTML = rows || `<tr><td colspan="8">No trades for selected period</td></tr>`;
+
+  if(totalEl){
+    totalEl.className = total >= 0 ? "green" : "red";
+    totalEl.innerHTML = `<b>${total.toFixed(2)}</b>`;
+  }
 }
 
   
