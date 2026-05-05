@@ -18,7 +18,7 @@ function now() {
 }
 
 const cookieParser = require('cookie-parser');
-const { Resend } = require('resend');
+
 
 
 const app = express();
@@ -44,12 +44,18 @@ app.get('/test', (req, res) => {
   res.send('SERVER WORKING');
 });
 
-
 let resend = null;
 
-if (process.env.RESEND_API_KEY && process.env.RESEND_API_KEY !== 'off') {
+if (
+  process.env.RESEND_API_KEY &&
+  process.env.RESEND_API_KEY !== 'off' &&
+  process.env.RESEND_API_KEY !== 'disabled'
+) {
   const { Resend } = require('resend');
   resend = new Resend(process.env.RESEND_API_KEY);
+  console.log('📧 Resend ENABLED');
+} else {
+  console.log('📧 Resend DISABLED');
 }
 
 
