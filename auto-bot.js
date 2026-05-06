@@ -1,4 +1,21 @@
 require("dotenv").config();
+const MAX_DAILY_LOSS_USD =
+  Number(process.env.MAX_DAILY_LOSS_USD || 300);
+
+const SPREAD_FILTER_ENABLED =
+  process.env.SPREAD_FILTER_ENABLED === "true";
+
+const MAX_SPREAD_USD =
+  Number(process.env.MAX_SPREAD_USD || 0.80);
+
+const NEWS_PROTECTION_ENABLED =
+  process.env.NEWS_PROTECTION_ENABLED === "true";
+
+const NEWS_BLOCK_BEFORE_MINUTES =
+  Number(process.env.NEWS_BLOCK_BEFORE_MINUTES || 30);
+
+const NEWS_BLOCK_AFTER_MINUTES =
+  Number(process.env.NEWS_BLOCK_AFTER_MINUTES || 15);
 
 const WebSocket = require("ws");
 const axios = require("axios");
@@ -111,6 +128,15 @@ function logEvent(type, data = {}) {
 
   writeJson(LOG_FILE, logs.slice(-1000));
   console.log(`[${type}]`, data);
+}
+
+if (dailyPnL <= -MAX_DAILY_LOSS_USD) {
+  console.log("🛑 DAILY LOSS LIMIT REACHED", {
+    dailyPnL,
+    maxLoss: MAX_DAILY_LOSS_USD
+  });
+
+  return;
 }
 
 function saveTrade(data = {}) {
@@ -1010,6 +1036,19 @@ async function scanMarketAndTrade() {
     }
 
     const snapshot = getMarketSnapshot();
+    const spreadUsd = Math.abs(Number(askPrice || 0) - Number(bidPrice || 0));
+
+if (
+  SPREAD_FILTER_ENABLED &&
+  spreadUsd > MAX_SPREAD_USD
+) {
+  console.log("🚫 SPREAD TOO HIGH", {
+    spreadUsd,
+    maxAllowed: MAX_SPREAD_USD
+  });
+
+  return;
+}
     const positions = await getOpenPositionsFromCTrader();
 
     const decision = await aiDecision(snapshot);
