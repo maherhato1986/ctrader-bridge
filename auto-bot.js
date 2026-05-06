@@ -965,8 +965,12 @@ async function scanMarketAndTrade() {
       confidence: decision.confidence
     });
 
-    const orderResult = await executeOrder({
-      if (MODE === "SIMULATION") {
+ const orderResult = await executeOrder({
+  side: decision.decision,
+  volume
+});
+
+if (MODE === "SIMULATION") {
 
   simulationPositions.push({
     positionId: Date.now(),
@@ -980,38 +984,35 @@ async function scanMarketAndTrade() {
 
   console.log("🧪 SIM POSITION ADDED");
 }
-      side: decision.decision,
-      volume
-    });
 
-    lastEntryTime = Date.now();
+lastEntryTime = Date.now();
 
-    logEvent("AUTO_TRADE_EXECUTED", {
-      symbol: SYMBOL,
-      symbolId: SYMBOL_ID,
-      side: decision.decision,
-      volume,
-      price: livePrice,
-      confidence: decision.confidence,
-      reason: decision.reason,
-      orderResult
-    });
+logEvent("AUTO_TRADE_EXECUTED", {
+  symbol: SYMBOL,
+  symbolId: SYMBOL_ID,
+  side: decision.decision,
+  volume,
+  price: livePrice,
+  confidence: decision.confidence,
+  reason: decision.reason,
+  orderResult
+});
 
-    saveTrade({
-      status: MODE === "LIVE" ? "opened" : "simulated",
-      symbol: SYMBOL,
-      symbolId: SYMBOL_ID,
-      side: decision.decision,
-      volume,
-      entryPrice: livePrice,
-      confidence: decision.confidence,
-      reason: decision.reason,
-      orderResult
-    });
+saveTrade({
+  status: MODE === "LIVE" ? "opened" : "simulated",
+  symbol: SYMBOL,
+  symbolId: SYMBOL_ID,
+  side: decision.decision,
+  volume,
+  entryPrice: livePrice,
+  confidence: decision.confidence,
+  reason: decision.reason,
+  orderResult
+});
 
-  } catch (err) {
-    logEvent("SCAN_ERROR", { error: err.message });
-  }
+} catch (err) {
+  logEvent("SCAN_ERROR", { error: err.message });
+}
 }
 
 // =========================
