@@ -1,21 +1,5 @@
 require("dotenv").config();
 
-
-const SPREAD_FILTER_ENABLED =
-  process.env.SPREAD_FILTER_ENABLED === "true";
-
-const MAX_SPREAD_USD =
-  Number(process.env.MAX_SPREAD_USD || 0.80);
-
-const NEWS_PROTECTION_ENABLED =
-  process.env.NEWS_PROTECTION_ENABLED === "true";
-
-const NEWS_BLOCK_BEFORE_MINUTES =
-  Number(process.env.NEWS_BLOCK_BEFORE_MINUTES || 30);
-
-const NEWS_BLOCK_AFTER_MINUTES =
-  Number(process.env.NEWS_BLOCK_AFTER_MINUTES || 15);
-
 const WebSocket = require("ws");
 const axios = require("axios");
 const fs = require("fs");
