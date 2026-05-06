@@ -135,13 +135,24 @@ function saveTrade(data = {}) {
 
   const trade = {
     tradeId: data.tradeId || `T-${Date.now()}`,
+    time: now(),
     openedAt: data.openedAt || now(),
+    closedAt: data.closedAt || null,
     status: data.status || "opened",
     closeReason: data.closeReason || null,
-    closePrice: data.closePrice || null,
+    symbol: data.symbol || SYMBOL,
+    symbolId: data.symbolId || SYMBOL_ID,
+    side: data.side || null,
+    volume: Number(data.volume || 0),
+    entryPrice: Number(data.entryPrice || 0),
+    closePrice: data.closePrice === undefined ? null : Number(data.closePrice),
+    stopLoss: data.stopLoss === undefined ? null : Number(data.stopLoss),
+    takeProfit: data.takeProfit === undefined ? null : Number(data.takeProfit),
     profitUsd: Number(data.profitUsd || 0),
     durationSec: Number(data.durationSec || 0),
-    ...data
+    confidence: data.confidence || null,
+    reason: data.reason || null,
+    orderResult: data.orderResult || null
   };
 
   trades.push(trade);
