@@ -1,6 +1,5 @@
 require("dotenv").config();
-const MAX_DAILY_LOSS_USD =
-  Number(process.env.MAX_DAILY_LOSS_USD || 300);
+
 
 const SPREAD_FILTER_ENABLED =
   process.env.SPREAD_FILTER_ENABLED === "true";
@@ -53,6 +52,21 @@ const DEFAULT_TP_USD = Number(process.env.AUTO_DEFAULT_TP_USD || 15);
 
 const MAX_OPEN_POSITIONS = Number(process.env.MAX_POSITIONS_PER_SYMBOL || 1);
 const MAX_DAILY_LOSS_USD = Number(process.env.MAX_DAILY_LOSS_USD || 100);
+
+const SPREAD_FILTER_ENABLED =
+  process.env.SPREAD_FILTER_ENABLED === "true";
+
+const MAX_SPREAD_USD =
+  Number(process.env.MAX_SPREAD_USD || 0.80);
+
+const NEWS_PROTECTION_ENABLED =
+  process.env.NEWS_PROTECTION_ENABLED === "true";
+
+const NEWS_BLOCK_BEFORE_MINUTES =
+  Number(process.env.NEWS_BLOCK_BEFORE_MINUTES || 30);
+
+const NEWS_BLOCK_AFTER_MINUTES =
+  Number(process.env.NEWS_BLOCK_AFTER_MINUTES || 15);
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || "";
 const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-4.1-mini";
