@@ -799,32 +799,40 @@ function localDecision(snapshot) {
   let confidence = 50;
   let reason = "Local fallback decision";
 
- if (
-  snapshot.trend === "UP" &&
-  snapshot.rsi >= 45 &&
-  snapshot.rsi <= 75 &&
-  snapshot.volatility >= 0.25
-) {
+  // BUY أقوى وأسرع
+  if (
+    snapshot.trend === "UP" &&
+    snapshot.rsi >= 38 &&
+    snapshot.rsi <= 72 &&
+    snapshot.volatility >= 0.15 &&
+    snapshot.price > snapshot.smaFast
+  ) {
     decision = "BUY";
-    confidence = 68;
-    reason = "Uptrend with acceptable RSI";
+    confidence = 78;
+    reason = "Strong buy setup: uptrend, price above SMA fast, RSI acceptable";
   }
 
- if (
-  snapshot.trend === "DOWN" &&
-  snapshot.rsi >= 25 &&
-  snapshot.rsi <= 55 &&
-  snapshot.volatility >= 0.25
-) {
+  // SELL أقوى وأسرع
+  if (
+    snapshot.trend === "DOWN" &&
+    snapshot.rsi >= 28 &&
+    snapshot.rsi <= 62 &&
+    snapshot.volatility >= 0.15 &&
+    snapshot.price < snapshot.smaFast
+  ) {
     decision = "SELL";
-    confidence = 68;
-    reason = "Downtrend with acceptable RSI";
+    confidence = 78;
+    reason = "Strong sell setup: downtrend, price below SMA fast, RSI acceptable";
   }
 
-  if (snapshot.trend === "SIDEWAYS") {
+  // SIDEWAYS لا يمنع دائمًا، فقط إذا الحركة ضعيفة جدًا
+  if (
+    snapshot.trend === "SIDEWAYS" &&
+    snapshot.volatility < 0.20
+  ) {
     decision = "WAIT";
-    confidence = 40;
-    reason = "Sideways market";
+    confidence = 42;
+    reason = "Sideways market with weak volatility";
   }
 
   return {
