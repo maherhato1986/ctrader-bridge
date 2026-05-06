@@ -227,7 +227,14 @@ function getPositionSide(p) {
 function getPositionStopLoss(p) {
   return Number(p.stopLoss || p.tradeData?.stopLoss || p.position?.stopLoss || 0);
 }
-
+function getPositionTakeProfit(p) {
+  return Number(
+    p.takeProfit ||
+    p.tradeData?.takeProfit ||
+    p.position?.takeProfit ||
+    0
+  );
+}
 function estimateProfitUsd(p, currentPrice) {
   const entry = getPositionEntry(p);
   const side = getPositionSide(p);
@@ -957,25 +964,7 @@ async function manageOpenPositions() {
             x => getPositionId(x) !== positionId
           );
 
-          saveTrade({
-            tradeId: p.tradeId,
-            status: "closed",
-            closeReason,
-            symbol: p.symbol || SYMBOL,
-            symbolId: p.symbolId || SYMBOL_ID,
-            side,
-            volume,
-            entryPrice: entry,
-            closePrice: livePrice,
-            stopLoss: sl,
-            takeProfit: tp,
-            profitUsd,
-            openedAt: p.openedAt,
-            closedAt: now(),
-            durationSec: Math.round(
-              (Date.now() - new Date(p.openedAt || Date.now()).getTime()) / 1000
-            )
-          });
+         
 
           console.log(hitTP ? "🎯 SIM TAKE PROFIT HIT" : "🛑 SIM STOP LOSS HIT", {
             positionId,
@@ -1200,21 +1189,18 @@ logEvent("AUTO_TRADE_EXECUTED", {
 });
 
 saveTrade({
-  tradeId: p.tradeId,
-  status: "closed",
-  closeReason: "TP_HIT",
+  tradeId: `OPEN-${Date.now()}`,
+  status: "opened",
   symbol: SYMBOL,
   symbolId: SYMBOL_ID,
-  side,
+  side: decision.decision,
   volume,
-  entryPrice: entry,
-  closePrice: livePrice,
-  stopLoss: sl,
-  takeProfit: tp,
-  profitUsd,
-  openedAt: p.openedAt,
-  closedAt: now(),
-  durationSec: Math.round((Date.now() - new Date(p.openedAt).getTime()) / 1000)
+  entryPrice: livePrice,
+  stopLoss: stops.stopLoss,
+  takeProfit: stops.takeProfit,
+  openedAt: now(),
+  confidence: decision.confidence,
+  reason: decision.reason
 });
 
 } catch (err) {
