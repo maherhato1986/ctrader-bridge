@@ -862,6 +862,54 @@ async function manageOpenPositions() {
       const isBuy = side.includes("BUY");
       const profitUsd = estimateProfitUsd(p, livePrice);
 
+      const tp = Number(p.takeProfit || 0);
+const sl = Number(p.stopLoss || 0);
+
+if (MODE === "SIMULATION") {
+
+  const hitTP = isBuy
+    ? livePrice >= tp
+    : livePrice <= tp;
+
+  const hitSL = isBuy
+    ? livePrice <= sl
+    : livePrice >= sl;
+
+  if (tp && hitTP) {
+
+    simulationPositions = simulationPositions.filter(
+      x => getPositionId(x) !== positionId
+    );
+
+    console.log("🎯 SIM TAKE PROFIT HIT", {
+      positionId,
+      side,
+      entry,
+      livePrice,
+      profitUsd
+    });
+
+    continue;
+  }
+
+  if (sl && hitSL) {
+
+    simulationPositions = simulationPositions.filter(
+      x => getPositionId(x) !== positionId
+    );
+
+    console.log("🛑 SIM STOP LOSS HIT", {
+      positionId,
+      side,
+      entry,
+      livePrice,
+      profitUsd
+    });
+
+    continue;
+  }
+}
+
       dailyPnL += 0;
 
       const breakEvenTrigger = Number(process.env.BREAK_EVEN_TRIGGER_USD || 5);
