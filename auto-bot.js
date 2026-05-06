@@ -955,39 +955,75 @@ if (MODE === "SIMULATION") {
     ? livePrice <= sl
     : livePrice >= sl;
 
-  if (tp && hitTP) {
+if (tp && hitTP) {
 
-    simulationPositions = simulationPositions.filter(
-      x => getPositionId(x) !== positionId
-    );
+  simulationPositions = simulationPositions.filter(
+    x => getPositionId(x) !== positionId
+  );
 
-    console.log("🎯 SIM TAKE PROFIT HIT", {
-      positionId,
-      side,
-      entry,
-      livePrice,
-      profitUsd
-    });
+  saveTrade({
+    tradeId: p.tradeId,
+    status: "closed",
+    closeReason: "TP_HIT",
+    symbol: SYMBOL,
+    symbolId: SYMBOL_ID,
+    side,
+    volume,
+    entryPrice: entry,
+    closePrice: livePrice,
+    stopLoss: sl,
+    takeProfit: tp,
+    profitUsd,
+    openedAt: p.openedAt,
+    closedAt: now(),
+    durationSec: Math.round((Date.now() - new Date(p.openedAt).getTime()) / 1000)
+  });
 
-    continue;
-  }
+  console.log("🎯 SIM TAKE PROFIT HIT", {
+    positionId,
+    side,
+    entry,
+    livePrice,
+    profitUsd
+  });
 
-  if (sl && hitSL) {
+  continue;
+}
 
-    simulationPositions = simulationPositions.filter(
-      x => getPositionId(x) !== positionId
-    );
+ if (sl && hitSL) {
 
-    console.log("🛑 SIM STOP LOSS HIT", {
-      positionId,
-      side,
-      entry,
-      livePrice,
-      profitUsd
-    });
+  simulationPositions = simulationPositions.filter(
+    x => getPositionId(x) !== positionId
+  );
 
-    continue;
-  }
+  saveTrade({
+    tradeId: p.tradeId,
+    status: "closed",
+    closeReason: "SL_HIT",
+    symbol: SYMBOL,
+    symbolId: SYMBOL_ID,
+    side,
+    volume,
+    entryPrice: entry,
+    closePrice: livePrice,
+    stopLoss: sl,
+    takeProfit: tp,
+    profitUsd,
+    openedAt: p.openedAt,
+    closedAt: now(),
+    durationSec: Math.round((Date.now() - new Date(p.openedAt).getTime()) / 1000)
+  });
+
+  console.log("🛑 SIM STOP LOSS HIT", {
+    positionId,
+    side,
+    entry,
+    livePrice,
+    profitUsd
+  });
+
+  continue;
+}
 }
 
       dailyPnL += 0;
