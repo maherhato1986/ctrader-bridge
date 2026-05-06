@@ -922,6 +922,15 @@ async function scanMarketAndTrade() {
     const positions = await getOpenPositionsFromCTrader();
 
     const decision = await aiDecision(snapshot);
+
+    console.log("📊 AUTO BOT SUMMARY:", {
+  price: snapshot.price,
+  trend: snapshot.trend,
+  rsi: snapshot.rsi,
+  decision: decision.decision,
+  confidence: decision.confidence,
+  reason: decision.reason
+});
     const allowed = await canEnterTrade(decision, positions);
 
     logEvent("AI_DECISION", {
