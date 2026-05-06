@@ -132,11 +132,20 @@ function logEvent(type, data = {}) {
 
 function saveTrade(data = {}) {
   const trades = readJson(TRADES_FILE);
-  trades.push({
-    time: now(),
+
+  const trade = {
+    tradeId: data.tradeId || `T-${Date.now()}`,
+    openedAt: data.openedAt || now(),
+    status: data.status || "opened",
+    closeReason: data.closeReason || null,
+    closePrice: data.closePrice || null,
+    profitUsd: Number(data.profitUsd || 0),
+    durationSec: Number(data.durationSec || 0),
     ...data
-  });
-  writeJson(TRADES_FILE, trades.slice(-500));
+  };
+
+  trades.push(trade);
+  writeJson(TRADES_FILE, trades.slice(-1000));
 }
 
 function requireEnv() {
@@ -1099,15 +1108,21 @@ const stops = normalizeDecisionStops({
 
 if (MODE === "SIMULATION") {
 
-  simulationPositions.push({
-    positionId: Date.now(),
-    symbolId: SYMBOL_ID,
-    tradeSide: decision.decision,
-    volume,
-    entryPrice: livePrice,
-    stopLoss: stops.stopLoss,
-takeProfit: stops.takeProfit
-  });
+ const tradeId = `SIM-${Date.now()}`;
+
+simulationPositions.push({
+  tradeId,
+  positionId: Date.now(),
+  symbol: SYMBOL,
+  symbolId: SYMBOL_ID,
+  tradeSide: decision.decision,
+  volume,
+  entryPrice: livePrice,
+  stopLoss: stops.stopLoss,
+  takeProfit: stops.takeProfit,
+  openedAt: now(),
+  status: "OPEN"
+});
 
   console.log("🧪 SIM POSITION ADDED");
 }
@@ -1126,17 +1141,21 @@ logEvent("AUTO_TRADE_EXECUTED", {
 });
 
 saveTrade({
-  status: MODE === "LIVE" ? "opened" : "simulated",
+  tradeId: p.tradeId,
+  status: "closed",
+  closeReason: "TP_HIT",
   symbol: SYMBOL,
   symbolId: SYMBOL_ID,
-  side: decision.decision,
+  side,
   volume,
-  stopLoss: stops.stopLoss,
-takeProfit: stops.takeProfit,
-  entryPrice: livePrice,
-  confidence: decision.confidence,
-  reason: decision.reason,
-  orderResult
+  entryPrice: entry,
+  closePrice: livePrice,
+  stopLoss: sl,
+  takeProfit: tp,
+  profitUsd,
+  openedAt: p.openedAt,
+  closedAt: now(),
+  durationSec: Math.round((Date.now() - new Date(p.openedAt).getTime()) / 1000)
 });
 
 } catch (err) {
