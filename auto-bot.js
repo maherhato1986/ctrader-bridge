@@ -154,10 +154,24 @@ function requireEnv() {
 
 function normalizeVolumeUnits(units) {
   let v = Math.round(Number(units) || MIN_VOLUME);
-  v = Math.round(v / 1000) * 1000;
 
-  if (v < MIN_VOLUME) v = MIN_VOLUME;
-  if (v > MAX_VOLUME) v = MAX_VOLUME;
+  // تقريب الحجم
+  v = Math.round(v / 100) * 100;
+
+  // الحد الأدنى
+  if (v < MIN_VOLUME) {
+    v = MIN_VOLUME;
+  }
+
+  // الحد الأعلى من ENV
+  if (v > MAX_VOLUME) {
+    v = MAX_VOLUME;
+  }
+
+  // حماية إضافية للحسابات الصغيرة
+  if (v > 100) {
+    v = 100;
+  }
 
   return v;
 }
