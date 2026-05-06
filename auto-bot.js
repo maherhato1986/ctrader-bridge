@@ -93,6 +93,7 @@ let dailyPnL = 0;
 let botRunning = true;
 let lastEntryTime = 0;
 let simulationPositions = [];
+let processedPnL = {};
 
 // =========================
 // HELPERS
@@ -798,13 +799,23 @@ function localDecision(snapshot) {
   let confidence = 50;
   let reason = "Local fallback decision";
 
-  if (snapshot.trend === "UP" && snapshot.rsi >= 50 && snapshot.rsi <= 70) {
+ if (
+  snapshot.trend === "UP" &&
+  snapshot.rsi >= 45 &&
+  snapshot.rsi <= 75 &&
+  snapshot.volatility >= 0.25
+) {
     decision = "BUY";
     confidence = 68;
     reason = "Uptrend with acceptable RSI";
   }
 
-  if (snapshot.trend === "DOWN" && snapshot.rsi >= 30 && snapshot.rsi <= 50) {
+ if (
+  snapshot.trend === "DOWN" &&
+  snapshot.rsi >= 25 &&
+  snapshot.rsi <= 55 &&
+  snapshot.volatility >= 0.25
+) {
     decision = "SELL";
     confidence = 68;
     reason = "Downtrend with acceptable RSI";
@@ -980,7 +991,10 @@ async function manageOpenPositions() {
         }
       }
 
-      dailyPnL += 0;
+    if (!processedPnL[positionId]) {
+  processedPnL[positionId] = true;
+  dailyPnL += profitUsd;
+}
 
       const breakEvenTrigger = Number(process.env.BREAK_EVEN_TRIGGER_USD || 5);
       const breakEvenBuffer = Number(process.env.BREAK_EVEN_BUFFER_USD || 0.5);
