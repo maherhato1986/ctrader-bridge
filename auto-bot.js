@@ -9,6 +9,9 @@ const fs = require("fs");
 // =========================
 
 const MODE = String(process.env.MODE || "SIMULATION").toUpperCase();
+if (MODE === "LIVE") {
+  console.log("🚨 LIVE MODE ENABLED - REAL ORDERS WILL BE EXECUTED");
+}
 
 const CTRADER_CLIENT_ID = process.env.CTRADER_CLIENT_ID || "";
 const CTRADER_CLIENT_SECRET = process.env.CTRADER_CLIENT_SECRET || "";
