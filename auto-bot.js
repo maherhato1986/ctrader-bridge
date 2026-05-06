@@ -1118,24 +1118,31 @@ const stops = normalizeDecisionStops({
 });
 
 if (MODE === "SIMULATION") {
+  const tradeId = `SIM-${Date.now()}`;
 
- const tradeId = `SIM-${Date.now()}`;
+  simulationPositions.push({
+    tradeId,
+    positionId: Date.now(),
+    symbol: SYMBOL,
+    symbolId: SYMBOL_ID,
+    tradeSide: decision.decision,
+    volume,
+    entryPrice: livePrice,
+    stopLoss: stops.stopLoss,
+    takeProfit: stops.takeProfit,
+    openedAt: now(),
+    status: "OPEN"
+  });
 
-simulationPositions.push({
-  tradeId,
-  positionId: Date.now(),
-  symbol: SYMBOL,
-  symbolId: SYMBOL_ID,
-  tradeSide: decision.decision,
-  volume,
-  entryPrice: livePrice,
-  stopLoss: stops.stopLoss,
-  takeProfit: stops.takeProfit,
-  openedAt: now(),
-  status: "OPEN"
-});
-
-  console.log("🧪 SIM POSITION ADDED");
+  console.log("🧪 SIM POSITION ADDED", {
+    tradeId,
+    symbol: SYMBOL,
+    side: decision.decision,
+    volume,
+    entryPrice: livePrice,
+    stopLoss: stops.stopLoss,
+    takeProfit: stops.takeProfit
+  });
 }
 
 lastEntryTime = Date.now();
