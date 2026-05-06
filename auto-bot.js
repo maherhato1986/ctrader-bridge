@@ -936,95 +936,60 @@ async function manageOpenPositions() {
       const entry = getPositionEntry(p);
       const side = getPositionSide(p);
       const currentSL = getPositionStopLoss(p);
+      const currentTP = getPositionTakeProfit(p);
 
       if (!positionId || !volume || !entry || !livePrice || !side) continue;
 
       const isBuy = side.includes("BUY");
       const profitUsd = estimateProfitUsd(p, livePrice);
 
-      const tp = Number(p.takeProfit || 0);
-const sl = Number(p.stopLoss || 0);
+      const sl = Number(currentSL || p.stopLoss || 0);
+      const tp = Number(currentTP || p.takeProfit || 0);
 
-if (MODE === "SIMULATION") {
+      if (MODE === "SIMULATION") {
+        const hitTP = tp && (isBuy ? livePrice >= tp : livePrice <= tp);
+        const hitSL = sl && (isBuy ? livePrice <= sl : livePrice >= sl);
 
-  const hitTP = isBuy
-    ? livePrice >= tp
-    : livePrice <= tp;
+        if (hitTP || hitSL) {
+          const closeReason = hitTP ? "TP_HIT" : "SL_HIT";
 
-  const hitSL = isBuy
-    ? livePrice <= sl
-    : livePrice >= sl;
+          simulationPositions = simulationPositions.filter(
+            x => getPositionId(x) !== positionId
+          );
 
-if (tp && hitTP) {
+          saveTrade({
+            tradeId: p.tradeId,
+            status: "closed",
+            closeReason,
+            symbol: p.symbol || SYMBOL,
+            symbolId: p.symbolId || SYMBOL_ID,
+            side,
+            volume,
+            entryPrice: entry,
+            closePrice: livePrice,
+            stopLoss: sl,
+            takeProfit: tp,
+            profitUsd,
+            openedAt: p.openedAt,
+            closedAt: now(),
+            durationSec: Math.round(
+              (Date.now() - new Date(p.openedAt || Date.now()).getTime()) / 1000
+            )
+          });
 
-  simulationPositions = simulationPositions.filter(
-    x => getPositionId(x) !== positionId
-  );
+          console.log(hitTP ? "🎯 SIM TAKE PROFIT HIT" : "🛑 SIM STOP LOSS HIT", {
+            positionId,
+            side,
+            entry,
+            livePrice,
+            stopLoss: sl,
+            takeProfit: tp,
+            profitUsd
+          });
 
-  saveTrade({
-    tradeId: p.tradeId,
-    status: "closed",
-    closeReason: "TP_HIT",
-    symbol: SYMBOL,
-    symbolId: SYMBOL_ID,
-    side,
-    volume,
-    entryPrice: entry,
-    closePrice: livePrice,
-    stopLoss: sl,
-    takeProfit: tp,
-    profitUsd,
-    openedAt: p.openedAt,
-    closedAt: now(),
-    durationSec: Math.round((Date.now() - new Date(p.openedAt).getTime()) / 1000)
-  });
-
-  console.log("🎯 SIM TAKE PROFIT HIT", {
-    positionId,
-    side,
-    entry,
-    livePrice,
-    profitUsd
-  });
-
-  continue;
-}
-
- if (sl && hitSL) {
-
-  simulationPositions = simulationPositions.filter(
-    x => getPositionId(x) !== positionId
-  );
-
-  saveTrade({
-    tradeId: p.tradeId,
-    status: "closed",
-    closeReason: "SL_HIT",
-    symbol: SYMBOL,
-    symbolId: SYMBOL_ID,
-    side,
-    volume,
-    entryPrice: entry,
-    closePrice: livePrice,
-    stopLoss: sl,
-    takeProfit: tp,
-    profitUsd,
-    openedAt: p.openedAt,
-    closedAt: now(),
-    durationSec: Math.round((Date.now() - new Date(p.openedAt).getTime()) / 1000)
-  });
-
-  console.log("🛑 SIM STOP LOSS HIT", {
-    positionId,
-    side,
-    entry,
-    livePrice,
-    profitUsd
-  });
-
-  continue;
-}
-}
+          continue;
+        }
+      }
 
       dailyPnL += 0;
 
@@ -1043,7 +1008,14 @@ if (tp && hitTP) {
 
         if (shouldUpdate) {
           await modifyStopLoss(positionId, newSL);
-          logEvent("BREAK_EVEN_APPLIED", { positionId, side, entry, livePrice, newSL, profitUsd });
+          logEvent("BREAK_EVEN_APPLIED", {
+            positionId,
+            side,
+            entry,
+            livePrice,
+            newSL,
+            profitUsd
+          });
         }
       }
 
@@ -1055,14 +1027,23 @@ if (tp && hitTP) {
           ? Number((livePrice - trailingDistance).toFixed(2))
           : Number((livePrice + trailingDistance).toFixed(2));
 
+        const updatedSL = getPositionStopLoss(p);
+
         const shouldUpdate =
-          !currentSL ||
-          (isBuy && newSL > currentSL) ||
-          (!isBuy && newSL < currentSL);
+          !updatedSL ||
+          (isBuy && newSL > updatedSL) ||
+          (!isBuy && newSL < updatedSL);
 
         if (shouldUpdate) {
           await modifyStopLoss(positionId, newSL);
-          logEvent("TRAILING_APPLIED", { positionId, side, livePrice, oldSL: currentSL, newSL, profitUsd });
+          logEvent("TRAILING_APPLIED", {
+            positionId,
+            side,
+            livePrice,
+            oldSL: updatedSL,
+            newSL,
+            profitUsd
+          });
         }
       }
 
@@ -1071,8 +1052,32 @@ if (tp && hitTP) {
       if (profitUsd <= -Math.abs(maxLoss)) {
         await closePosition(positionId, volume);
 
-        logEvent("MAX_LOSS_CLOSE", { positionId, side, livePrice, profitUsd });
-        saveTrade({ status: "closed_max_loss", positionId, side, volume, exitPrice: livePrice, profitUsd });
+        logEvent("MAX_LOSS_CLOSE", {
+          positionId,
+          side,
+          livePrice,
+          profitUsd
+        });
+
+        saveTrade({
+          tradeId: p.tradeId,
+          status: "closed",
+          closeReason: "MAX_LOSS",
+          symbol: p.symbol || SYMBOL,
+          symbolId: p.symbolId || SYMBOL_ID,
+          side,
+          volume,
+          entryPrice: entry,
+          closePrice: livePrice,
+          stopLoss: sl,
+          takeProfit: tp,
+          profitUsd,
+          openedAt: p.openedAt,
+          closedAt: now(),
+          durationSec: Math.round(
+            (Date.now() - new Date(p.openedAt || Date.now()).getTime()) / 1000
+          )
+        });
       }
     }
   } catch (err) {
