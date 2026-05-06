@@ -77,6 +77,7 @@ let priceHistory = [];
 let dailyPnL = 0;
 let botRunning = true;
 let lastEntryTime = 0;
+let simulationPositions = [];
 
 // =========================
 // HELPERS
@@ -589,6 +590,10 @@ async function modifyStopLoss(positionId, stopLoss) {
 }
 
 async function getOpenPositionsFromCTrader() {
+    if (MODE === "SIMULATION") {
+    return simulationPositions;
+  }
+
   if (MODE !== "LIVE") return [];
 
   return new Promise((resolve, reject) => {
@@ -961,6 +966,20 @@ async function scanMarketAndTrade() {
     });
 
     const orderResult = await executeOrder({
+      if (MODE === "SIMULATION") {
+
+  simulationPositions.push({
+    positionId: Date.now(),
+    symbolId: SYMBOL_ID,
+    tradeSide: decision.decision,
+    volume,
+    entryPrice: livePrice,
+    stopLoss: decision.stopLossUsd || 0,
+    takeProfit: decision.takeProfitUsd || 0
+  });
+
+  console.log("🧪 SIM POSITION ADDED");
+}
       side: decision.decision,
       volume
     });
