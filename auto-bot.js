@@ -820,6 +820,18 @@ async function canEnterTrade(decision, positions) {
     return { ok: false, reason: "Entry cooldown active" };
   }
 
+  const sameDirection = sameSymbol.some(p => {
+  const side = getPositionSide(p);
+  return side === decision.decision;
+});
+
+if (sameDirection) {
+  return {
+    ok: false,
+    reason: "Same direction position already exists"
+  };
+}
+
   return { ok: true };
 }
 
