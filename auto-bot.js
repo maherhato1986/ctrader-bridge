@@ -788,6 +788,32 @@ function calculateVolume({ equity, riskPercent, stopLossUsd, confidence }) {
   return normalizeVolumeUnits(units);
 }
 
+function normalizeDecisionStops({ decision, side, entryPrice }) {
+  const isBuy = String(side).toUpperCase() === "BUY";
+
+  const rawSL = Number(decision.stopLossUsd || DEFAULT_SL_USD);
+  const rawTP = Number(decision.takeProfitUsd || DEFAULT_TP_USD);
+
+  const isPriceValue = (v) => Number(v) > 1000;
+
+  const stopLoss = isPriceValue(rawSL)
+    ? rawSL
+    : isBuy
+      ? entryPrice - Math.abs(rawSL)
+      : entryPrice + Math.abs(rawSL);
+
+  const takeProfit = isPriceValue(rawTP)
+    ? rawTP
+    : isBuy
+      ? entryPrice + Math.abs(rawTP)
+      : entryPrice - Math.abs(rawTP);
+
+  return {
+    stopLoss: Number(stopLoss.toFixed(2)),
+    takeProfit: Number(takeProfit.toFixed(2))
+  };
+}
+
 async function canEnterTrade(decision, positions) {
   if (!["BUY", "SELL"].includes(decision.decision)) {
     return { ok: false, reason: "Decision is WAIT" };
@@ -1013,6 +1039,12 @@ async function scanMarketAndTrade() {
       confidence: decision.confidence
     });
 
+const stops = normalizeDecisionStops({
+  decision,
+  side: decision.decision,
+  entryPrice: livePrice
+});
+    
  const orderResult = await executeOrder({
   side: decision.decision,
   volume
@@ -1026,8 +1058,8 @@ if (MODE === "SIMULATION") {
     tradeSide: decision.decision,
     volume,
     entryPrice: livePrice,
-    stopLoss: decision.stopLossUsd || 0,
-    takeProfit: decision.takeProfitUsd || 0
+    stopLoss: stops.stopLoss,
+takeProfit: stops.takeProfit
   });
 
   console.log("🧪 SIM POSITION ADDED");
@@ -1052,6 +1084,8 @@ saveTrade({
   symbolId: SYMBOL_ID,
   side: decision.decision,
   volume,
+  stopLoss: stops.stopLoss,
+takeProfit: stops.takeProfit,
   entryPrice: livePrice,
   confidence: decision.confidence,
   reason: decision.reason,
