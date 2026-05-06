@@ -53,8 +53,8 @@ const NEWS_BLOCK_AFTER_MINUTES = Number(process.env.NEWS_BLOCK_AFTER_MINUTES || 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || "";
 const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-4.1-mini";
 
-const LOG_FILE = "auto_bot_logs.json";
-const TRADES_FILE = "auto_bot_trades.json";
+const LOG_FILE = process.env.AUTO_LOG_FILE || `auto_bot_${SYMBOL}_logs.json`;
+const TRADES_FILE = process.env.AUTO_TRADES_FILE || `auto_bot_${SYMBOL}_trades.json`;
 
 // =========================
 // cTrader Payload Types
@@ -715,7 +715,7 @@ async function aiDecision(snapshot) {
 
   try {
     const prompt = `
-You are an autonomous gold trading risk engine.
+You are an autonomous trading risk engine for ${snapshot.symbol}.
 
 Return JSON only:
 {
@@ -730,7 +730,7 @@ Rules:
 - Do not overtrade.
 - If trend is unclear, return WAIT.
 - Prefer safe trades only.
-- XAUUSD only.
+- Analyze ${snapshot.symbol} only.
 
 Market snapshot:
 ${JSON.stringify(snapshot, null, 2)}
