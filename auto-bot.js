@@ -88,6 +88,8 @@ const PT = {
 // =========================
 
 let livePrice = 0;
+let bidPrice = 0;
+let askPrice = 0;
 let priceHistory = [];
 let dailyPnL = 0;
 let botRunning = true;
@@ -339,10 +341,13 @@ function startLivePriceStream() {
       if (bidRaw && askRaw) {
         const digits = Number(process.env.CTRADER_PRICE_DIGITS || 2);
 
-        const bid = Number(bidRaw) / Math.pow(10, digits);
-        const ask = Number(askRaw) / Math.pow(10, digits);
+       const bid = Number(bidRaw) / Math.pow(10, digits);
+const ask = Number(askRaw) / Math.pow(10, digits);
 
-        livePrice = Number(((bid + ask) / 2).toFixed(2));
+bidPrice = Number(bid.toFixed(2));
+askPrice = Number(ask.toFixed(2));
+
+livePrice = Number(((bidPrice + askPrice) / 2).toFixed(2));
 
         priceHistory.push({
           time: Date.now(),
