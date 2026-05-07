@@ -1546,7 +1546,10 @@ if (
 
     const decision = await aiDecision(snapshot);
 
-    if (decision.decision !== structure.direction) {
+   if (
+  structure.direction !== "WAIT" &&
+  decision.decision !== structure.direction
+) {
   logEvent("AI_STRUCTURE_CONFLICT", {
     aiDecision: decision.decision,
     structureDirection: structure.direction,
