@@ -267,6 +267,38 @@ function estimateProfitUsd(p, currentPrice) {
   return Number((priceMove * lots * contractSize).toFixed(2));
 }
 
+function extractPositionIdFromOrderResult(orderResult) {
+  const payload = orderResult?.payload || {};
+
+  if (payload?.errorCode) return null;
+
+  const direct =
+    payload?.position?.positionId ||
+    payload?.deal?.positionId ||
+    payload?.executionEvent?.position?.positionId ||
+    payload?.executionEvent?.positionId ||
+    payload?.order?.positionId ||
+    payload?.positionId ||
+    null;
+
+  if (direct) return Number(direct);
+
+  function deepFind(obj) {
+    if (!obj || typeof obj !== "object") return null;
+
+    if (obj.positionId) return Number(obj.positionId);
+
+    for (const key of Object.keys(obj)) {
+      const found = deepFind(obj[key]);
+      if (found) return found;
+    }
+
+    return null;
+  }
+
+  return deepFind(payload);
+}
+
 // =========================
 // INDICATORS
 // =========================
@@ -1450,17 +1482,35 @@ const stops = normalizeDecisionStops({
   entryPrice: livePrice
 });
     
- const orderResult = await executeOrder({
+const orderResult = await executeOrder({
   side: decision.decision,
   volume
 });
-  const realPositionId =
-  orderResult?.payload?.position?.positionId ||
-  orderResult?.payload?.deal?.positionId ||
-  orderResult?.payload?.executionEvent?.position?.positionId ||
-  orderResult?.payload?.executionEvent?.positionId ||
-  orderResult?.payload?.order?.positionId ||
-  null;
+
+if (orderResult?.payload?.errorCode) {
+  logEvent("ORDER_REJECTED", {
+    errorCode: orderResult.payload.errorCode,
+    description: orderResult.payload.description,
+    orderResult
+  });
+
+  return;
+}
+
+let realPositionId = extractPositionIdFromOrderResult(orderResult);
+
+if (MODE === "LIVE" && !realPositionId) {
+  const latestPositions = await getOpenPositionsFromCTrader();
+
+  const matched = latestPositions.find(p =>
+    Number(p.symbolId || p.tradeData?.symbolId || p.position?.symbolId || 0) === SYMBOL_ID &&
+    getPositionSide(p) === decision.decision
+  );
+
+  realPositionId = matched ? getPositionId(matched) : null;
+}
+
+console.log("📌 REAL POSITION ID:", realPositionId);
 
 if (MODE === "SIMULATION") {
   const tradeId = `SIM-${Date.now()}`;
@@ -1491,6 +1541,12 @@ if (MODE === "SIMULATION") {
 }
 if (MODE === "LIVE" && realPositionId) {
   try {
+    console.log("🎯 APPLYING INITIAL SLTP", {
+      positionId: realPositionId,
+      stopLoss: stops.stopLoss,
+      takeProfit: stops.takeProfit
+    });
+
     const sltpResult = await modifyPositionSLTP(
       realPositionId,
       stops.stopLoss,
