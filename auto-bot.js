@@ -135,7 +135,8 @@ function saveTrade(data = {}) {
   const trades = readJson(TRADES_FILE);
 
   const trade = {
-    tradeId: data.tradeId || `T-${Date.now()}`,
+  tradeId: data.tradeId || `T-${Date.now()}`,
+  positionId: data.positionId || null,
     time: now(),
     openedAt: data.openedAt || now(),
     closedAt: data.closedAt || null,
@@ -176,23 +177,11 @@ function requireEnv() {
 function normalizeVolumeUnits(units) {
   let v = Math.round(Number(units) || MIN_VOLUME);
 
-  // تقريب الحجم
+  // Round to nearest 100 units
   v = Math.round(v / 100) * 100;
 
-  // الحد الأدنى
-  if (v < MIN_VOLUME) {
-    v = MIN_VOLUME;
-  }
-
-  // الحد الأعلى من ENV
-  if (v > MAX_VOLUME) {
-    v = MAX_VOLUME;
-  }
-
-  // حماية إضافية للحسابات الصغيرة
-  if (v > 100) {
-    v = 100;
-  }
+  if (v < MIN_VOLUME) v = MIN_VOLUME;
+  if (v > MAX_VOLUME) v = MAX_VOLUME;
 
   return v;
 }
@@ -1168,6 +1157,12 @@ const stops = normalizeDecisionStops({
   side: decision.decision,
   volume
 });
+    const realPositionId =
+  orderResult?.payload?.position?.positionId ||
+  orderResult?.payload?.deal?.positionId ||
+  orderResult?.payload?.executionEvent?.position?.positionId ||
+  orderResult?.payload?.order?.positionId ||
+  null;
 
 if (MODE === "SIMULATION") {
   const tradeId = `SIM-${Date.now()}`;
@@ -1211,7 +1206,8 @@ logEvent("AUTO_TRADE_EXECUTED", {
 });
 
 saveTrade({
-  tradeId: `OPEN-${Date.now()}`,
+  tradeId: realPositionId ? `POS-${realPositionId}` : `OPEN-${Date.now()}`,
+  positionId: realPositionId,
   status: "opened",
   symbol: SYMBOL,
   symbolId: SYMBOL_ID,
