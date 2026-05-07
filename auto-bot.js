@@ -767,9 +767,16 @@ Return JSON only:
 }
 
 Rules:
-- Do not overtrade.
-- If trend is unclear, return WAIT.
-- Prefer safe trades only.
+- Avoid overtrading but do not be overly conservative.
+- Return WAIT only if:
+  - trend is SIDEWAYS and volatility < 0.30
+  - or RSI > 82 for BUY
+  - or RSI < 18 for SELL
+- If trend is UP and price > smaFast, prefer BUY.
+- If trend is DOWN and price < smaFast, prefer SELL.
+- Strong trends should produce confidence between 60-80.
+- Use tighter stop loss during high volatility.
+- Prefer momentum continuation over reversals.
 - Analyze ${snapshot.symbol} only.
 
 Market snapshot:
