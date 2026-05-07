@@ -374,54 +374,73 @@ function analyzeStructureMomentum(snapshot) {
     };
   }
 
-  const recent = candles.slice(-6);
-  const previous = candles.slice(-20, -6);
+  const last = candles[candles.length - 1];
+  const before = candles[candles.length - 2];
+  const before2 = candles[candles.length - 3];
+
+  const recent = candles.slice(-8);
+  const previous = candles.slice(-18, -8);
 
   const recentHigh = Math.max(...recent);
   const recentLow = Math.min(...recent);
   const previousHigh = Math.max(...previous);
   const previousLow = Math.min(...previous);
 
-  const last = candles[candles.length - 1];
-  const before = candles[candles.length - 2];
-
   const momentum = Math.abs(last - before);
-  const minMomentum = Number(process.env.STRUCTURE_MIN_MOMENTUM_USD || 0.35);
+  const minMomentum = Number(process.env.STRUCTURE_MIN_MOMENTUM_USD || 0.25);
 
-  const bullishBreak =
+  const bullishBreakout =
     last > previousHigh &&
-    snapshot.trend === "UP" &&
     snapshot.rsi >= 45 &&
-    snapshot.rsi <= 75 &&
+    snapshot.rsi <= 78 &&
     momentum >= minMomentum;
 
-  const bearishBreak =
+  const bearishBreakout =
     last < previousLow &&
-    snapshot.trend === "DOWN" &&
-    snapshot.rsi >= 25 &&
-    snapshot.rsi <= 55 &&
+    snapshot.rsi >= 22 &&
+    snapshot.rsi <= 58 &&
     momentum >= minMomentum;
 
-  if (bullishBreak) {
+  const bullishReversal =
+    before2 > before &&
+    last > before &&
+    last > snapshot.smaFast &&
+    snapshot.rsi >= 35 &&
+    snapshot.rsi <= 70 &&
+    snapshot.volatility >= 0.20;
+
+  const bearishReversal =
+    before2 < before &&
+    last < before &&
+    last < snapshot.smaFast &&
+    snapshot.rsi >= 30 &&
+    snapshot.rsi <= 65 &&
+    snapshot.volatility >= 0.20;
+
+  if (bullishBreakout || bullishReversal) {
     return {
       ok: true,
       direction: "BUY",
-      reason: "Bullish structure break with momentum"
+      reason: bullishBreakout
+        ? "Bullish breakout with momentum"
+        : "Bullish reversal with momentum"
     };
   }
 
-  if (bearishBreak) {
+  if (bearishBreakout || bearishReversal) {
     return {
       ok: true,
       direction: "SELL",
-      reason: "Bearish structure break with momentum"
+      reason: bearishBreakout
+        ? "Bearish breakout with momentum"
+        : "Bearish reversal with momentum"
     };
   }
 
   return {
     ok: false,
     direction: "WAIT",
-    reason: "No valid structure breakout"
+    reason: "No valid breakout or reversal momentum"
   };
 }
 
