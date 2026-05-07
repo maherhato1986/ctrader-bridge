@@ -363,6 +363,68 @@ function getMarketSnapshot() {
   };
 }
 
+function analyzeStructureMomentum(snapshot) {
+  const candles = snapshot.candles || [];
+
+  if (candles.length < 20) {
+    return {
+      ok: false,
+      direction: "WAIT",
+      reason: "Not enough candles for structure analysis"
+    };
+  }
+
+  const recent = candles.slice(-6);
+  const previous = candles.slice(-20, -6);
+
+  const recentHigh = Math.max(...recent);
+  const recentLow = Math.min(...recent);
+  const previousHigh = Math.max(...previous);
+  const previousLow = Math.min(...previous);
+
+  const last = candles[candles.length - 1];
+  const before = candles[candles.length - 2];
+
+  const momentum = Math.abs(last - before);
+  const minMomentum = Number(process.env.STRUCTURE_MIN_MOMENTUM_USD || 0.35);
+
+  const bullishBreak =
+    last > previousHigh &&
+    snapshot.trend === "UP" &&
+    snapshot.rsi >= 45 &&
+    snapshot.rsi <= 75 &&
+    momentum >= minMomentum;
+
+  const bearishBreak =
+    last < previousLow &&
+    snapshot.trend === "DOWN" &&
+    snapshot.rsi >= 25 &&
+    snapshot.rsi <= 55 &&
+    momentum >= minMomentum;
+
+  if (bullishBreak) {
+    return {
+      ok: true,
+      direction: "BUY",
+      reason: "Bullish structure break with momentum"
+    };
+  }
+
+  if (bearishBreak) {
+    return {
+      ok: true,
+      direction: "SELL",
+      reason: "Bearish structure break with momentum"
+    };
+  }
+
+  return {
+    ok: false,
+    direction: "WAIT",
+    reason: "No valid structure breakout"
+  };
+}
+
 // =========================
 // LIVE PRICE STREAM
 // =========================
@@ -1433,8 +1495,20 @@ if (isNewsProtectionActive()) {
       return;
     }
 
-    const snapshot = getMarketSnapshot();
-    const spreadUsd = Math.abs(Number(askPrice || 0) - Number(bidPrice || 0));
+ const snapshot = getMarketSnapshot();
+
+const structure = analyzeStructureMomentum(snapshot);
+
+if (!structure.ok) {
+  logEvent("STRUCTURE_FILTER_BLOCK", {
+    reason: structure.reason,
+    snapshot
+  });
+
+  return;
+}
+
+const spreadUsd = Math.abs(Number(askPrice || 0) - Number(bidPrice || 0));
 
 if (
   SPREAD_FILTER_ENABLED &&
@@ -1450,6 +1524,16 @@ if (
     const positions = await getOpenPositionsFromCTrader();
 
     const decision = await aiDecision(snapshot);
+
+    if (decision.decision !== structure.direction) {
+  logEvent("AI_STRUCTURE_CONFLICT", {
+    aiDecision: decision.decision,
+    structureDirection: structure.direction,
+    structureReason: structure.reason
+  });
+
+  return;
+}
 
     console.log("📊 AUTO BOT SUMMARY:", {
   price: snapshot.price,
