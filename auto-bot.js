@@ -161,6 +161,29 @@ function saveTrade(data = {}) {
   writeJson(TRADES_FILE, trades.slice(-1000));
 }
 
+function updateTradeByPositionId(positionId, patch = {}) {
+  const trades = readJson(TRADES_FILE);
+  const id = Number(positionId);
+
+  const index = trades.findIndex(t =>
+    Number(t.positionId) === id &&
+    t.status === "opened"
+  );
+
+  if (index === -1) return false;
+
+  trades[index] = {
+    ...trades[index],
+    ...patch,
+    updatedAt: now()
+  };
+
+  writeJson(TRADES_FILE, trades.slice(-1000));
+
+  return true;
+}
+
+
 function requireEnv() {
   const missing = [];
 
@@ -935,6 +958,98 @@ if (sameDirection) {
   return { ok: true };
 }
 
+async function syncClosedTrades() {
+  try {
+    const trades = readJson(TRADES_FILE);
+
+    const openTrades = trades.filter(t =>
+      t.status === "opened" &&
+      t.positionId
+    );
+
+    if (!openTrades.length) return;
+
+    const positions = await getOpenPositionsFromCTrader();
+
+    const openPositionIds = positions.map(p =>
+      Number(getPositionId(p))
+    );
+
+    for (const trade of openTrades) {
+      const positionId = Number(trade.positionId);
+
+      if (openPositionIds.includes(positionId)) {
+        continue;
+      }
+
+      const closePrice = livePrice;
+
+      const side = String(trade.side || "").toUpperCase();
+
+      const volume = Number(trade.volume || 0);
+
+      const entryPrice = Number(trade.entryPrice || 0);
+
+      if (
+        !closePrice ||
+        !entryPrice ||
+        !volume ||
+        !side
+      ) {
+        continue;
+      }
+
+      const lots = volume / 10000;
+
+      const contractSize =
+        Number(process.env.XAUUSD_CONTRACT_SIZE || 100);
+
+      const priceMove =
+        side === "BUY"
+          ? closePrice - entryPrice
+          : entryPrice - closePrice;
+
+      const profitUsd = Number(
+        (priceMove * lots * contractSize).toFixed(2)
+      );
+
+      const openedMs = new Date(
+        trade.openedAt || trade.time || Date.now()
+      ).getTime();
+
+      const durationSec = Math.max(
+        0,
+        Math.round((Date.now() - openedMs) / 1000)
+      );
+
+      updateTradeByPositionId(positionId, {
+        status: "closed",
+        closedAt: now(),
+        closeReason: "POSITION_NOT_FOUND_IN_CTRADER",
+        closePrice,
+        profitUsd,
+        durationSec
+      });
+
+      dailyPnL += profitUsd;
+
+      logEvent("CLOSED_TRADE_SYNCED", {
+        positionId,
+        side,
+        entryPrice,
+        closePrice,
+        volume,
+        profitUsd,
+        dailyPnL
+      });
+    }
+  } catch (err) {
+    logEvent("CLOSED_SYNC_ERROR", {
+      error: err.message
+    });
+  }
+}
+
 // =========================
 // TRADE MANAGEMENT
 // =========================
@@ -1244,8 +1359,17 @@ function startAutoBot() {
 
   startLivePriceStream();
 
-  setInterval(scanMarketAndTrade, SCAN_INTERVAL_MS);
-  setInterval(manageOpenPositions, MANAGEMENT_INTERVAL_MS);
+ setInterval(scanMarketAndTrade, SCAN_INTERVAL_MS);
+
+setInterval(
+  manageOpenPositions,
+  MANAGEMENT_INTERVAL_MS
+);
+
+setInterval(
+  syncClosedTrades,
+  MANAGEMENT_INTERVAL_MS
+);
 }
 
 process.on("uncaughtException", err => {
