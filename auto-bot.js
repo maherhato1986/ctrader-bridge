@@ -32,7 +32,8 @@ const MIN_VOLUME = Number(process.env.MIN_VOLUME_UNITS || 1000);
 const MAX_VOLUME = Number(process.env.MAX_VOLUME_UNITS || 50000);
 
 const RISK_PERCENT = Number(process.env.RISK_PER_TRADE_PERCENT || 0.5);
-const DEFAULT_EQUITY = Number(process.env.AUTO_DEFAULT_EQUITY || 1000);
+const DEFAULT_EQUITY =
+  Number(process.env.AUTO_DEFAULT_EQUITY || 6600);
 
 const DEFAULT_SL_USD = Number(process.env.AUTO_DEFAULT_SL_USD || 8);
 const DEFAULT_TP_USD = Number(process.env.AUTO_DEFAULT_TP_USD || 15);
@@ -425,11 +426,21 @@ livePrice = Number(((bidPrice + askPrice) / 2).toFixed(2));
 
 async function executeOrder({ side, volume }) {
   if (MODE !== "LIVE") {
-    logEvent("SIMULATED_ORDER", { symbol: SYMBOL, symbolId: SYMBOL_ID, side, volume });
+    logEvent("SIMULATED_ORDER", {
+      symbol: SYMBOL,
+      symbolId: SYMBOL_ID,
+      side,
+      volume
+    });
+
     return { simulated: true };
   }
 
   requireEnv();
+
+  if (Number(volume) > 5000) {
+    throw new Error("Volume safety limit exceeded");
+  }
 
   return new Promise((resolve, reject) => {
     const ws = new WebSocket(CTRADER_WS_URL);
@@ -437,16 +448,26 @@ async function executeOrder({ side, volume }) {
 
     const timeout = setTimeout(() => {
       if (settled) return;
+
       settled = true;
-      try { ws.close(); } catch {}
+
+      try {
+        ws.close();
+      } catch {}
+
       reject(new Error("Order timeout"));
     }, 30000);
 
     function finish(data) {
       if (settled) return;
+
       settled = true;
       clearTimeout(timeout);
-      try { ws.close(); } catch {}
+
+      try {
+        ws.close();
+      } catch {}
+
       resolve(data);
     }
 
@@ -474,6 +495,7 @@ async function executeOrder({ side, volume }) {
               accessToken: CTRADER_ACCESS_TOKEN
             }
           }));
+
           return;
         }
 
@@ -489,6 +511,7 @@ async function executeOrder({ side, volume }) {
               volume: Number(volume)
             }
           }));
+
           return;
         }
 
@@ -1252,13 +1275,40 @@ if (reverseSignal && profitUsd > 3) {
 // AUTO ENTRY LOOP
 // =========================
 
+function isNewsProtectionActive() {
+  if (!NEWS_PROTECTION_ENABLED) return false;
+
+  const nowUtc = new Date();
+
+  const hour = nowUtc.getUTCHours();
+  const minute = nowUtc.getUTCMinutes();
+
+  const totalMinutes = hour * 60 + minute;
+
+  // أمثلة تقريبية لأخبار الذهب
+  const blockedTimes = [
+    13 * 60 + 30, // US News
+    18 * 60,      // FOMC / Fed
+  ];
+
+  return blockedTimes.some(t =>
+    Math.abs(totalMinutes - t) <= NEWS_BLOCK_BEFORE_MINUTES
+  );
+}
+
 async function scanMarketAndTrade() {
   try {
     if (!botRunning) {
       logEvent("BOT_STOPPED", { reason: "botRunning=false" });
       return;
     }
+if (isNewsProtectionActive()) {
+  logEvent("NEWS_PROTECTION_BLOCK", {
+    reason: "High impact news window"
+  });
 
+  return;
+}
     if (!livePrice || priceHistory.length < 30) {
       logEvent("WAITING_FOR_PRICE_HISTORY", {
         livePrice,
