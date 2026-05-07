@@ -687,6 +687,90 @@ async function modifyStopLoss(positionId, stopLoss) {
   });
 }
 
+async function modifyPositionSLTP(positionId, stopLoss, takeProfit) {
+  if (MODE !== "LIVE") {
+    logEvent("SIMULATED_SLTP_UPDATE", { positionId, stopLoss, takeProfit });
+    return { simulated: true };
+  }
+
+  return new Promise((resolve, reject) => {
+    const ws = new WebSocket(CTRADER_WS_URL);
+    let settled = false;
+
+    const timeout = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      try { ws.close(); } catch {}
+      reject(new Error("Modify SLTP timeout"));
+    }, 30000);
+
+    function finish(data) {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      try { ws.close(); } catch {}
+      resolve(data);
+    }
+
+    ws.on("open", () => {
+      ws.send(JSON.stringify({
+        clientMsgId: `sltp-app-auth-${Date.now()}`,
+        payloadType: PT.APP_AUTH_REQ,
+        payload: {
+          clientId: CTRADER_CLIENT_ID,
+          clientSecret: CTRADER_CLIENT_SECRET
+        }
+      }));
+    });
+
+    ws.on("message", raw => {
+      try {
+        const msg = JSON.parse(raw.toString());
+
+        if (msg.payloadType === PT.APP_AUTH_RES) {
+          ws.send(JSON.stringify({
+            clientMsgId: `sltp-account-auth-${Date.now()}`,
+            payloadType: PT.ACCOUNT_AUTH_REQ,
+            payload: {
+              ctidTraderAccountId: CTRADER_ACCOUNT_ID,
+              accessToken: CTRADER_ACCESS_TOKEN
+            }
+          }));
+          return;
+        }
+
+        if (msg.payloadType === PT.ACCOUNT_AUTH_RES) {
+          ws.send(JSON.stringify({
+            clientMsgId: `modify-sltp-${Date.now()}`,
+            payloadType: PT.AMEND_POSITION_SLTP_REQ,
+            payload: {
+              ctidTraderAccountId: CTRADER_ACCOUNT_ID,
+              positionId: Number(positionId),
+              stopLoss: Number(stopLoss),
+              takeProfit: Number(takeProfit),
+              guaranteedStopLoss: false
+            }
+          }));
+          return;
+        }
+
+        if (
+          msg.payloadType === PT.EXECUTION_EVENT ||
+          msg.payloadType === PT.ORDER_ERROR_EVENT ||
+          msg.payload?.errorCode
+        ) {
+          return finish(msg);
+        }
+      } catch (err) {
+        reject(err);
+      }
+    });
+
+    ws.on("error", reject);
+  });
+}
+
+
 async function getOpenPositionsFromCTrader() {
     if (MODE === "SIMULATION") {
     return simulationPositions;
@@ -1370,10 +1454,11 @@ const stops = normalizeDecisionStops({
   side: decision.decision,
   volume
 });
-    const realPositionId =
+  const realPositionId =
   orderResult?.payload?.position?.positionId ||
   orderResult?.payload?.deal?.positionId ||
   orderResult?.payload?.executionEvent?.position?.positionId ||
+  orderResult?.payload?.executionEvent?.positionId ||
   orderResult?.payload?.order?.positionId ||
   null;
 
@@ -1404,7 +1489,27 @@ if (MODE === "SIMULATION") {
     takeProfit: stops.takeProfit
   });
 }
+if (MODE === "LIVE" && realPositionId) {
+  try {
+    const sltpResult = await modifyPositionSLTP(
+      realPositionId,
+      stops.stopLoss,
+      stops.takeProfit
+    );
 
+    logEvent("INITIAL_SLTP_APPLIED", {
+      positionId: realPositionId,
+      stopLoss: stops.stopLoss,
+      takeProfit: stops.takeProfit,
+      sltpResult
+    });
+  } catch (err) {
+    logEvent("INITIAL_SLTP_ERROR", {
+      positionId: realPositionId,
+      error: err.message
+    });
+  }
+}
 lastEntryTime = Date.now();
     lastTradeSide = decision.decision;
 
