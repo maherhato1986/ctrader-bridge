@@ -1307,7 +1307,9 @@ const reverseSignal =
     snapshot.trend === "UP" &&
     snapshot.rsi > 55);
 
-if (reverseSignal && profitUsd > 3) {
+const minProfitToExit = Number(process.env.MIN_PROFIT_TO_EXIT_USD || 10);
+
+if (reverseSignal && profitUsd >= minProfitToExit) {
   await closePosition(positionId, volume);
 
   logEvent("AI_REVERSE_EXIT", {
