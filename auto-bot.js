@@ -92,6 +92,7 @@ let priceHistory = [];
 let dailyPnL = 0;
 let botRunning = true;
 let lastEntryTime = 0;
+let lastTradeSide = null;
 let simulationPositions = [];
 let processedPnL = {};
 
@@ -946,6 +947,20 @@ async function canEnterTrade(decision, positions) {
   }
 
   const cooldownMs = Number(process.env.AUTO_ENTRY_COOLDOWN_MS || 60000);
+  const reverseCooldownMs = Number(
+  process.env.AUTO_REVERSE_COOLDOWN_MS || 180000
+);
+
+if (
+  lastTradeSide &&
+  lastTradeSide !== decision.decision &&
+  Date.now() - lastEntryTime < reverseCooldownMs
+) {
+  return {
+    ok: false,
+    reason: "Reverse trade cooldown active"
+  };
+}
   if (Date.now() - lastEntryTime < cooldownMs) {
     return { ok: false, reason: "Entry cooldown active" };
   }
@@ -1079,6 +1094,32 @@ async function manageOpenPositions() {
 
       const isBuy = side.includes("BUY");
       const profitUsd = estimateProfitUsd(p, livePrice);
+
+      const snapshot = getMarketSnapshot();
+
+const reverseSignal =
+  (isBuy &&
+    snapshot.trend === "DOWN" &&
+    snapshot.rsi < 45) ||
+
+  (!isBuy &&
+    snapshot.trend === "UP" &&
+    snapshot.rsi > 55);
+
+if (reverseSignal && profitUsd > 3) {
+  await closePosition(positionId, volume);
+
+  logEvent("AI_REVERSE_EXIT", {
+    positionId,
+    side,
+    livePrice,
+    profitUsd,
+    trend: snapshot.trend,
+    rsi: snapshot.rsi
+  });
+
+  continue;
+}
 
       const sl = Number(currentSL || p.stopLoss || 0);
       const tp = Number(currentTP || p.takeProfit || 0);
@@ -1315,6 +1356,7 @@ if (MODE === "SIMULATION") {
 }
 
 lastEntryTime = Date.now();
+    lastTradeSide = decision.decision;
 
 logEvent("AUTO_TRADE_EXECUTED", {
   symbol: SYMBOL,
